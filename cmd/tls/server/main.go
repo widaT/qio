@@ -11,9 +11,7 @@ import (
 func main() {
 
 	handle := func(conn net.Conn) error {
-
 		b := make([]byte, 1024)
-
 		n, err := conn.Read(b)
 		fmt.Printf("%s", b[:n])
 		if err != nil {
@@ -28,11 +26,4 @@ func main() {
 	}
 
 	server.ServeTLs("tcp", ":9999", "tls/cert.pem", "tls/key.pem")
-}
-func validNextProto(proto string) bool {
-	switch proto {
-	case "", "http/1.1", "http/1.0":
-		return false
-	}
-	return true
 }

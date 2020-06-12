@@ -9,8 +9,10 @@ import (
 
 //Conn shoud imp net.Conn
 type Conn struct {
-	buf        *ConpositeBuf
-	linkedBuf  *LinkedBuffer
+	//buf       *ConpositeBuf
+	//linkedBuf *LinkedBuffer
+
+	buf        *Buf
 	fd         int
 	localAddr  net.Addr // local addr
 	remoteAddr net.Addr // remote addr
@@ -18,15 +20,17 @@ type Conn struct {
 
 func NewConn(fd int, sa unix.Sockaddr) *Conn {
 	conn := new(Conn)
-	conn.buf = &ConpositeBuf{}
-	conn.linkedBuf = New()
+	/* 	conn.buf = &ConpositeBuf{}
+	   	conn.linkedBuf = New() */
+	conn.buf = NewBuf()
 	conn.fd = fd
 	conn.remoteAddr = SockaddrToTCPOrUnixAddr(sa)
 	return conn
 }
 
 func (conn *Conn) Read(b []byte) (n int, e error) {
-	return conn.buf.Read(b)
+	n, e = conn.buf.Read(b)
+	return
 }
 
 func (conn *Conn) Write(b []byte) (n int, err error) {
@@ -34,7 +38,6 @@ func (conn *Conn) Write(b []byte) (n int, err error) {
 }
 
 func (conn *Conn) Close() error {
-	conn.buf.Drop()
 	return unix.Close(conn.fd)
 }
 

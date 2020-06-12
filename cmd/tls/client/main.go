@@ -15,6 +15,7 @@ func main() {
 		return
 	}
 	defer conn.Close()
+
 	n, err := conn.Write([]byte("hello\n"))
 	if err != nil {
 		log.Println(n, err)

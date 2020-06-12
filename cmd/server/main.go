@@ -12,13 +12,12 @@ func main() {
 
 	handle := func(conn net.Conn) error {
 
-		fmt.Println("ddddd")
 		b := make([]byte, 1024)
 
 		n, err := conn.Read(b)
 
 		if err != nil {
-			return err
+			//return err
 		}
 		fmt.Printf("------%s", b[:n])
 		return nil

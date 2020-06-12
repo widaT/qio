@@ -2,6 +2,7 @@ package qio
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net"
 
@@ -16,6 +17,8 @@ type Info struct {
 	nConn net.Conn
 	conn  *Conn
 }
+
+var BigBuf = make([]byte, 0x10000)
 
 type Server struct {
 	poller *poller.Selector
@@ -61,7 +64,6 @@ func (s *Server) Serve(network string, addr string) error {
 	if err != nil {
 		return err
 	}
-
 	fn := func(ev *poller.Event) error {
 		switch ev.Token() {
 		case poller.Token(0):
@@ -75,9 +77,9 @@ func (s *Server) Serve(network string, addr string) error {
 					}
 					return err
 				}
-				/* 				if err := poller.Nonblock(cfd); err != nil {
+				if err := poller.Nonblock(cfd); err != nil {
 					return err
-				} */
+				}
 				err = s.poller.Register(cfd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Edge)
 				if err != nil {
 					return err
@@ -97,8 +99,9 @@ func (s *Server) Serve(network string, addr string) error {
 				case ev.IsReadable():
 					connectionClosed := false
 					for {
-						b := info.conn.linkedBuf.NexWriteBlock()
-						n, err := unix.Read(int(ev.Fd), b)
+						//b := info.conn.linkedBuf.NexWriteBlock()
+						n, err := unix.Read(int(ev.Fd), BigBuf)
+
 						if n == 0 {
 							connectionClosed = true
 							break
@@ -114,9 +117,13 @@ func (s *Server) Serve(network string, addr string) error {
 							}
 							return err
 						}
-						seg := info.conn.linkedBuf.MoveWritePiont(n)
+						fmt.Printf("%s", BigBuf[:n])
+						n, err = info.conn.buf.Write(BigBuf[:n])
+
+						fmt.Println("wrete", n)
+						//seg := info.conn.linkedBuf.MoveWritePiont(n)
 						//fmt.Printf("%s", seg.Byte())
-						info.conn.buf.Wrap(seg)
+						//info.conn.buf.Wrap(seg)
 						err = s.handle(info.nConn)
 						if err != nil {
 							delete(s.connections, fd)
