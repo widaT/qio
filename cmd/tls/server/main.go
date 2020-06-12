@@ -29,3 +29,10 @@ func main() {
 
 	server.ServeTLs("tcp", ":9999", "tls/cert.pem", "tls/key.pem")
 }
+func validNextProto(proto string) bool {
+	switch proto {
+	case "", "http/1.1", "http/1.0":
+		return false
+	}
+	return true
+}

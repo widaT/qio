@@ -75,9 +75,9 @@ func (s *Server) Serve(network string, addr string) error {
 					}
 					return err
 				}
-				if err := poller.Nonblock(cfd); err != nil {
+				/* 				if err := poller.Nonblock(cfd); err != nil {
 					return err
-				}
+				} */
 				err = s.poller.Register(cfd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Edge)
 				if err != nil {
 					return err
