@@ -1,5 +1,9 @@
 package qio
 
+import (
+	"io"
+)
+
 type Buf struct {
 	b []byte
 
@@ -14,20 +18,32 @@ func NewBuf() *Buf {
 }
 
 func (buf *Buf) Read(b []byte) (n int, err error) {
-	length := len(b)
-	if length == 0 || buf.w == buf.r {
+	n = len(b)
+	if n == 0 {
 		return 0, nil
 	}
-	movpos := min(length, buf.w-buf.r)
-	copy(b, buf.b[buf.r:buf.r+movpos])
-	buf.r += movpos
-	n = movpos
+
+	if buf.w == buf.r {
+		return 0, io.EOF
+	}
+
+	n = min(n, buf.w-buf.r)
+	copy(b, buf.b[buf.r:buf.r+n])
+	buf.r += n
+	return
+}
+
+func (buf *Buf) Buffered() (b []byte) {
+	b = buf.b[buf.r:buf.w]
+	buf.r = buf.w
 	return
 }
 
 func (buf *Buf) Write(b []byte) (int, error) {
-	buf.w += copy(buf.b[buf.w:], b)
-	return len(b), nil
+	n := copy(buf.b[buf.w:], b)
+	buf.w += n
+	//fmt.Println(buf.w)
+	return n, nil
 }
 
 func min(a, b int) int {

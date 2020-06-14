@@ -28,12 +28,18 @@ func NewConn(fd int, sa unix.Sockaddr) *Conn {
 	return conn
 }
 
+func (conn *Conn) Buffered() []byte {
+
+	return conn.buf.Buffered()
+}
+
 func (conn *Conn) Read(b []byte) (n int, e error) {
 	n, e = conn.buf.Read(b)
 	return
 }
 
 func (conn *Conn) Write(b []byte) (n int, err error) {
+	//fmt.Printf("write %s\n", b)
 	return unix.Write(conn.fd, b)
 }
 

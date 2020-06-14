@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"log"
+	"time"
 )
 
 func main() {
@@ -16,13 +17,17 @@ func main() {
 	}
 	defer conn.Close()
 
-	n, err := conn.Write([]byte("hello\n"))
-	if err != nil {
-		log.Println(n, err)
-		return
+	for {
+		time.Sleep(1e9)
+		n, err := conn.Write([]byte("hello\n"))
+		if err != nil {
+			log.Println(n, err)
+			return
+		}
 	}
+
 	buf := make([]byte, 100)
-	n, err = conn.Read(buf)
+	n, err := conn.Read(buf)
 	if err != nil {
 		log.Println(n, err)
 		return

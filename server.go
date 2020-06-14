@@ -1,10 +1,12 @@
 package qio
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
+	"sync"
+
+	"github.com/widaT/qio/tls"
 
 	"github.com/widaT/poller"
 	"github.com/widaT/poller/interest"
@@ -14,8 +16,11 @@ import (
 
 type Handler func(net.Conn) error
 type Info struct {
-	nConn net.Conn
-	conn  *Conn
+	nConn     net.Conn
+	handshake bool
+	conn      *Conn
+	opened    bool
+	skip      int
 }
 
 var BigBuf = make([]byte, 0x10000)
@@ -25,7 +30,7 @@ type Server struct {
 	//ln   *listener
 	handle Handler
 
-	connections map[int]Info
+	connections sync.Map
 	tlsConfig   *tls.Config
 }
 
@@ -37,11 +42,11 @@ func NewServer(hander Handler) (*Server, error) {
 		return nil, err
 	}
 	server.handle = hander
-	server.connections = make(map[int]Info)
+
 	return server, nil
 }
 
-func (s *Server) ServeTLs(network, addr, cert, key string) {
+func (s *Server) ServeTLS(network, addr, cert, key string) {
 	c, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
 		log.Println(err)
@@ -86,15 +91,15 @@ func (s *Server) Serve(network string, addr string) error {
 				}
 				conn := NewConn(cfd, sa)
 				if s.tlsConfig != nil {
-					s.connections[cfd] = Info{nConn: tls.Server(conn, s.tlsConfig), conn: conn}
+					s.connections.Store(cfd, &Info{nConn: tls.Server(conn, s.tlsConfig), conn: conn})
 
 				} else {
-					s.connections[cfd] = Info{nConn: conn, conn: conn}
+					s.connections.Store(cfd, &Info{nConn: conn, conn: conn})
 				}
 
 			}
 		case poller.Token(1):
-			if info, found := s.connections[int(ev.Fd)]; found {
+			if infoP, found := s.connections.Load(int(ev.Fd)); found {
 				switch {
 				case ev.IsReadable():
 					connectionClosed := false
@@ -117,23 +122,52 @@ func (s *Server) Serve(network string, addr string) error {
 							}
 							return err
 						}
-						fmt.Printf("%s", BigBuf[:n])
+						info := infoP.(*Info)
 						n, err = info.conn.buf.Write(BigBuf[:n])
-
-						fmt.Println("wrete", n)
+						fmt.Println("wrote ", n)
 						//seg := info.conn.linkedBuf.MoveWritePiont(n)
 						//fmt.Printf("%s", seg.Byte())
 						//info.conn.buf.Wrap(seg)
-						err = s.handle(info.nConn)
+						/* 	if !info.opened {
+						go func() { */
+						/* 	err = s.handle(info.nConn)
 						if err != nil {
-							delete(s.connections, fd)
-							info.nConn.Close()
-							break
+							if err != tls.ErrPending {
+								s.connections.Delete(fd)
+								info.nConn.Close()
+							}
+
+						} */
+
+						if !info.opened {
+							//	info.opened = true
+
+							tConn, ok := info.nConn.(*tls.Conn)
+							if ok && !tConn.ConnectionState().HandshakeComplete {
+								err := tConn.Handshake()
+								if err != nil {
+									//s.connections.Delete(fd)
+									//info.nConn.Close()
+									fmt.Println(err)
+									continue
+								}
+								//info.handshake = true
+							} else {
+								info.handshake = true
+							}
+						}
+						if info.handshake {
+							err = s.handle(info.nConn)
+							if err != nil {
+								s.connections.Delete(fd)
+								info.nConn.Close()
+							}
+
 						}
 					}
 					if connectionClosed {
-						delete(s.connections, fd)
-						info.nConn.Close()
+						s.connections.Delete(fd)
+						infoP.(*Info).nConn.Close()
 					}
 				}
 			}

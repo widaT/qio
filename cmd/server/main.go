@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 
@@ -16,8 +17,13 @@ func main() {
 
 		n, err := conn.Read(b)
 
+		fmt.Println(n)
 		if err != nil {
 			//return err
+			if err == io.EOF {
+				return nil
+			}
+			return err
 		}
 		fmt.Printf("------%s", b[:n])
 		return nil
