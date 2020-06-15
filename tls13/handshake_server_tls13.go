@@ -10,12 +10,15 @@ import (
 	"crypto/hmac"
 	"crypto/rsa"
 	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"sync/atomic"
 	"time"
 )
+
+const HandshakeStateStepOne uint32 = 0
+const HandshakeStateCompleted uint32 = 1
+const HandshakeStateStepTwo uint32 = 2
 
 // maxClientPSKIdentities is the number of client PSK identities the server will
 // attempt to validate. It will ignore the rest not to let cheap ClientHello
@@ -41,12 +44,9 @@ type serverHandshakeStateTLS13 struct {
 }
 
 func (hs *serverHandshakeStateTLS13) handshake() error {
-
 	c := hs.c
-	fmt.Println("ddddddd-----", c.handshakeStatus)
 	switch c.handshakeStatus {
-	case 0:
-
+	case HandshakeStateStepOne:
 		// For an overview of the TLS 1.3 handshake, see RFC 8446, Section 2.
 		if err := hs.processClientHello(); err != nil {
 
@@ -79,9 +79,8 @@ func (hs *serverHandshakeStateTLS13) handshake() error {
 		if _, err := c.flush(); err != nil {
 			return err
 		}
-		atomic.StoreUint32(&c.handshakeStatus, 3)
-	case 3:
-		fmt.Println("=======dddddddddddd")
+		atomic.StoreUint32(&c.handshakeStatus, HandshakeStateStepTwo)
+	case HandshakeStateStepTwo:
 		if err := hs.readClientCertificate(); err != nil {
 			return err
 		}
@@ -89,7 +88,7 @@ func (hs *serverHandshakeStateTLS13) handshake() error {
 
 			return err
 		}
-		atomic.StoreUint32(&c.handshakeStatus, 1)
+		atomic.StoreUint32(&c.handshakeStatus, HandshakeStateCompleted)
 	}
 
 	return nil

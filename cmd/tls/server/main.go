@@ -11,9 +11,9 @@ import (
 func main() {
 
 	handle := func(conn net.Conn) error {
-		b := make([]byte, 1024)
+		b := make([]byte, 0x10000)
 		n, err := conn.Read(b)
-		fmt.Printf("------ %s", b[:n], err)
+		fmt.Printf("receive %d \n", n)
 		if err != nil {
 			return err
 		}

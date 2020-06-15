@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/widaT/qio/tls"
+	tls "github.com/widaT/qio/tls13"
 
 	"github.com/widaT/poller"
 	"github.com/widaT/poller/interest"
@@ -15,12 +15,9 @@ import (
 )
 
 type Handler func(net.Conn) error
-type Info struct {
-	nConn     net.Conn
-	handshake bool
-	conn      *Conn
-	opened    bool
-	skip      int
+type ConnPair struct {
+	nConn net.Conn
+	conn  *Conn
 }
 
 var BigBuf = make([]byte, 0x10000)
@@ -70,6 +67,14 @@ func (s *Server) Serve(network string, addr string) error {
 		return err
 	}
 	fn := func(ev *poller.Event) error {
+
+		/* 		defer func() {
+			if err := recover(); err != nil {
+
+				fmt.Printf("%s", err)
+			}
+		}() */
+
 		switch ev.Token() {
 		case poller.Token(0):
 			for {
@@ -85,32 +90,32 @@ func (s *Server) Serve(network string, addr string) error {
 				if err := poller.Nonblock(cfd); err != nil {
 					return err
 				}
-				err = s.poller.Register(cfd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Edge)
+				err = s.poller.Register(cfd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
 				if err != nil {
 					return err
 				}
 				conn := NewConn(cfd, sa)
 				if s.tlsConfig != nil {
-					s.connections.Store(cfd, &Info{nConn: tls.Server(conn, s.tlsConfig), conn: conn})
-
+					s.connections.Store(cfd, &ConnPair{nConn: tls.Server(conn, s.tlsConfig), conn: conn})
 				} else {
-					s.connections.Store(cfd, &Info{nConn: conn, conn: conn})
+					s.connections.Store(cfd, &ConnPair{nConn: conn, conn: conn})
 				}
 
 			}
 		case poller.Token(1):
 			if infoP, found := s.connections.Load(int(ev.Fd)); found {
+				info := infoP.(*ConnPair)
 				switch {
 				case ev.IsReadable():
 					connectionClosed := false
 					for {
-						//b := info.conn.linkedBuf.NexWriteBlock()
-						n, err := unix.Read(int(ev.Fd), BigBuf)
-
+						b := info.conn.buf.NexWriteBlock()
+						n, err := unix.Read(int(ev.Fd), b)
 						if n == 0 {
 							connectionClosed = true
 							break
 						}
+
 						if err != nil {
 							//WouldBlock
 							if err == unix.EAGAIN {
@@ -120,58 +125,43 @@ func (s *Server) Serve(network string, addr string) error {
 							if err == unix.EINTR {
 								continue
 							}
-							return err
+							//防止 connection reset by peer 的情况下程序退出
+							log.Println(err)
+							connectionClosed = true
+							break
 						}
-						info := infoP.(*Info)
-						n, err = info.conn.buf.Write(BigBuf[:n])
-						fmt.Println("wrote ", n)
-						//seg := info.conn.linkedBuf.MoveWritePiont(n)
-						//fmt.Printf("%s", seg.Byte())
+						_ = info.conn.buf.MoveWritePiont(n)
+						fmt.Println(n)
 						//info.conn.buf.Wrap(seg)
-						/* 	if !info.opened {
-						go func() { */
-						/* 	err = s.handle(info.nConn)
-						if err != nil {
-							if err != tls.ErrPending {
-								s.connections.Delete(fd)
-								info.nConn.Close()
+					}
+					tConn, ok := info.nConn.(*tls.Conn)
+					if ok {
+						if !tConn.ConnectionState().HandshakeComplete {
+							err := tConn.Handshake()
+							if err != nil {
+								connectionClosed = true
 							}
-
-						} */
-
-						if !info.opened {
-							//	info.opened = true
-
-							tConn, ok := info.nConn.(*tls.Conn)
-							if ok && !tConn.ConnectionState().HandshakeComplete {
-								err := tConn.Handshake()
-								if err != nil {
-									//s.connections.Delete(fd)
-									//info.nConn.Close()
-									fmt.Println(err)
-									continue
-								}
-								//info.handshake = true
-							} else {
-								info.handshake = true
-							}
-						}
-						if info.handshake {
+						} else {
 							err = s.handle(info.nConn)
 							if err != nil {
 								s.connections.Delete(fd)
 								info.nConn.Close()
 							}
-
+						}
+					} else {
+						err = s.handle(info.nConn)
+						if err != nil {
+							s.connections.Delete(fd)
+							info.nConn.Close()
 						}
 					}
 					if connectionClosed {
+						fmt.Println("connectionClosed")
 						s.connections.Delete(fd)
-						infoP.(*Info).nConn.Close()
+						info.nConn.Close()
 					}
 				}
 			}
-
 		}
 		return nil
 	}

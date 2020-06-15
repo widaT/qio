@@ -20,6 +20,10 @@ import (
 	"time"
 )
 
+type Handshaker interface {
+	handshake() error
+}
+
 // A Conn represents a secured connection.
 // It implements the net.Conn interface.
 type Conn struct {
@@ -108,10 +112,7 @@ type Conn struct {
 	activeCall int32
 
 	tmp [16]byte
-
-	hs interface {
-		handshake() error
-	}
+	hs  Handshaker
 }
 
 // Access to net.Conn methods.
@@ -1354,9 +1355,9 @@ func (c *Conn) Handshake() error {
 		c.flush()
 	}
 
-	/* if c.handshakeErr == nil && !c.handshakeComplete() {
-		c.handshakeErr = errors.New("tls: internal error: handshake should have had a result")
-	} */
+	if c.handshakeErr == io.EOF {
+		return nil
+	}
 
 	return c.handshakeErr
 }

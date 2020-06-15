@@ -12,11 +12,8 @@ import (
 func main() {
 
 	handle := func(conn net.Conn) error {
-
-		b := make([]byte, 1024)
-
+		b := make([]byte, 0x10000)
 		n, err := conn.Read(b)
-
 		fmt.Println(n)
 		if err != nil {
 			//return err
@@ -25,14 +22,12 @@ func main() {
 			}
 			return err
 		}
-		fmt.Printf("------%s", b[:n])
+		fmt.Printf("------%d ------ ", n)
 		return nil
 	}
 	server, err := qio.NewServer(handle)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	server.Serve("tcp", ":9999")
-
 }

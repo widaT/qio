@@ -10,7 +10,7 @@ import (
 )
 
 const GcFrequency int = 6
-const BLOCKSIZE int = 2048
+const BLOCKSIZE int = 4096
 
 const (
 	RefCountAdd   = 0
@@ -23,6 +23,7 @@ type Block struct {
 	refCount   int32
 	data       []byte
 	blockIndex int
+	next       *Block
 }
 
 func (b *Block) String() string {
@@ -32,6 +33,7 @@ func (b *Block) String() string {
 func (b *Block) reset(blockIndex int) {
 	b.refCount = 0
 	b.blockIndex = blockIndex
+	b.next = nil
 }
 
 type Segment struct {
@@ -73,6 +75,7 @@ type LinkedBuffer struct {
 	l              *list.List
 	nextBlockIndex int
 	wp             Point
+	rp             Point
 }
 
 func New() *LinkedBuffer {
@@ -81,6 +84,10 @@ func New() *LinkedBuffer {
 	l.PushBack(block)
 	return &LinkedBuffer{
 		l: l,
+		rp: Point{
+			b:   block,
+			pos: 0,
+		},
 		wp: Point{
 			b:   block,
 			pos: 0,
@@ -94,6 +101,7 @@ func (buf *LinkedBuffer) growth() {
 		buf.Gc()
 	}
 	block := NewBlock(buf.nextBlockIndex)
+	buf.wp.b.next = block
 	buf.l.PushBack(block)
 	buf.nextBlockIndex++
 	buf.wp.pos = 0
@@ -116,6 +124,73 @@ func (buf *LinkedBuffer) MoveWritePiont(n int) (s *Segment) {
 	return s
 }
 
+func (buf *LinkedBuffer) Read(b []byte) (n int, err error) {
+	n = len(b)
+	if n == 0 {
+		return
+	}
+
+	wp := buf.wp
+	rp := buf.rp
+	if wp.b == rp.b && wp.pos == rp.pos {
+		err = io.EOF
+		return
+	}
+
+	fmt.Println("buffer", buf.Buffered(), n)
+	if n > buf.Buffered() {
+		n = buf.Buffered()
+	}
+
+	nn := 0
+	if len(rp.b.data[rp.pos:]) >= n {
+		buf.rp.pos += copy(b, rp.b.data[rp.pos:rp.pos+n])
+		return
+	}
+
+	nn += copy(b, rp.b.data[rp.pos:])
+	block := rp.b
+	for block.next != nil {
+		block = block.next
+		buf.rp.b = block
+		buf.rp.pos = copy(b[nn:], block.data[:min(n-nn, BLOCKSIZE)])
+		nn += buf.rp.pos
+	}
+	return
+}
+
+func (buf *LinkedBuffer) Release() {
+	var next *list.Element
+	for item := buf.l.Front(); item != nil; item = next {
+		next = item.Next()
+		block := item.Value.(*Block)
+		buf.l.Remove(item)
+		blockPool.Put(block)
+	}
+}
+
+func min(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+func (buf *LinkedBuffer) Buffered() int {
+	wp := buf.wp
+	rp := buf.rp
+	n := wp.b.blockIndex - rp.b.blockIndex
+	if n == 0 {
+		return wp.pos - rp.pos
+	}
+	return (BLOCKSIZE - rp.pos + wp.pos) + (n-1)*BLOCKSIZE
+}
+
+/* func (buf *LinkedBuffer) Buffered() int {
+
+	for p:= buf.wp;
+} */
+
 func (buf *LinkedBuffer) BlockLen() int {
 	return buf.l.Len()
 }
@@ -132,15 +207,17 @@ func (buf *LinkedBuffer) Gc() {
 	for item := buf.l.Front(); item != nil; item = next {
 		next = item.Next()
 		block := item.Value.(*Block)
-		if block == buf.wp.b {
+		if block == buf.rp.b {
 			break
 		}
-		if atomic.LoadInt32(&block.refCount) == 0 {
-			buf.l.Remove(item)
-			blockPool.Put(block)
-		} else {
-			break
-		}
+		/* 		if atomic.LoadInt32(&block.refCount) == 0 {
+		   			buf.l.Remove(item)
+		   			blockPool.Put(block)
+		   		} else {
+		   			break
+		   		} */
+		buf.l.Remove(item)
+		blockPool.Put(block)
 	}
 }
 
@@ -163,7 +240,7 @@ func (c *ConpositeBuf) Wrap(s *Segment) {
 	c.length += len(s.b)
 }
 
-func (c *ConpositeBuf) Bufferd() int {
+func (c *ConpositeBuf) Buffered() int {
 	return c.length - c.read
 }
 
@@ -227,7 +304,7 @@ func (c *ConpositeBuf) ReadN(n int) ([]byte, error) {
 
 //Peek return bytes but not move the read point
 func (c *ConpositeBuf) Peek(n int) (b []byte, err error) {
-	if n > c.Bufferd() {
+	if n > c.Buffered() {
 		return nil, errors.New("not enough data")
 	}
 	b, err = c.ReadN(n)
