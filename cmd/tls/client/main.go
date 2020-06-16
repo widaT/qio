@@ -29,7 +29,8 @@ func tcp() {
 
 func main() {
 
-	tcp()
+	//tcp()
+	tks()
 }
 
 func tks() {

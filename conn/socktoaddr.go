@@ -4,7 +4,7 @@
 
 // +build linux darwin netbsd freebsd openbsd dragonfly
 
-package qio
+package conn
 
 import (
 	"net"

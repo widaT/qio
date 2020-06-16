@@ -17,7 +17,9 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"time"
+
+	"github.com/widaT/qio/buf"
+	"github.com/widaT/qio/conn"
 )
 
 type Handshaker interface {
@@ -28,7 +30,7 @@ type Handshaker interface {
 // It implements the net.Conn interface.
 type Conn struct {
 	// constant
-	conn     net.Conn
+	conn     conn.Conn
 	isClient bool
 
 	// handshakeStatus is 1 if the connection is currently transferring
@@ -89,12 +91,12 @@ type Conn struct {
 
 	// input/output
 	in, out   halfConn
-	rawInput  bytes.Buffer // raw input, starting with a record header
-	input     bytes.Reader // application data waiting to be read, from rawInput.Next
-	hand      bytes.Buffer // handshake data waiting to be read
-	outBuf    []byte       // scratch buffer used by out.encrypt
-	buffering bool         // whether records are buffered in sendBuf
-	sendBuf   []byte       // a buffer of records waiting to be sent
+	rawInput  *buf.LinkedBuffer // raw input, starting with a record header
+	input     bytes.Reader      // application data waiting to be read, from rawInput.Next
+	hand      bytes.Buffer      // handshake data waiting to be read
+	outBuf    []byte            // scratch buffer used by out.encrypt
+	buffering bool              // whether records are buffered in sendBuf
+	sendBuf   []byte            // a buffer of records waiting to be sent
 
 	// bytesSent counts the bytes of application data sent.
 	// packetsSent counts packets.
@@ -124,6 +126,18 @@ func (c *Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
+func (c *Conn) NexWriteBlock() []byte {
+	return c.conn.NexWriteBlock()
+}
+
+func (c *Conn) MoveWritePiont(n int) {
+	c.conn.MoveWritePiont(n)
+}
+
+func (c *Conn) BufferPoint() *buf.LinkedBuffer {
+	return c.conn.BufferPoint()
+}
+
 // RemoteAddr returns the remote network address.
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
@@ -132,23 +146,23 @@ func (c *Conn) RemoteAddr() net.Addr {
 // SetDeadline sets the read and write deadlines associated with the connection.
 // A zero value for t means Read and Write will not time out.
 // After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
-func (c *Conn) SetDeadline(t time.Time) error {
+/* func (c *Conn) SetDeadline(t time.Time) error {
 	return c.conn.SetDeadline(t)
 }
-
+*/
 // SetReadDeadline sets the read deadline on the underlying connection.
 // A zero value for t means Read will not time out.
-func (c *Conn) SetReadDeadline(t time.Time) error {
+/* func (c *Conn) SetReadDeadline(t time.Time) error {
 	return c.conn.SetReadDeadline(t)
-}
+} */
 
 // SetWriteDeadline sets the write deadline on the underlying connection.
 // A zero value for t means Write will not time out.
 // After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
-func (c *Conn) SetWriteDeadline(t time.Time) error {
+/* func (c *Conn) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
-
+*/
 // A halfConn represents one direction of the record layer
 // connection, either sending or receiving.
 type halfConn struct {
@@ -546,12 +560,12 @@ type RecordHeaderError struct {
 	// sent an initial handshake that didn't look like TLS.
 	// It is nil if there's already been a handshake or a TLS alert has
 	// been written to the connection.
-	Conn net.Conn
+	Conn conn.Conn
 }
 
 func (e RecordHeaderError) Error() string { return "tls: " + e.Msg }
 
-func (c *Conn) newRecordHeaderError(conn net.Conn, msg string) (err RecordHeaderError) {
+func (c *Conn) newRecordHeaderError(conn conn.Conn, msg string) (err RecordHeaderError) {
 	err.Msg = msg
 	err.Conn = conn
 	copy(err.RecordHeader[:], c.rawInput.Bytes())
@@ -584,28 +598,16 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 	}
 	handshakeComplete := c.handshakeComplete()
 
-	// This function modifies c.rawInput, which owns the c.input memory.
-	if c.input.Len() != 0 {
-		return c.in.setErrorLocked(errors.New("tls: internal error: attempted to read record with pending application data"))
+	if c.rawInput == nil {
+		c.rawInput = c.conn.BufferPoint()
 	}
-	c.input.Reset(nil)
-	// Read header, payload.
-
-	if err := c.readFromUntil(c.conn, recordHeaderLen); err != nil {
-		// RFC 8446, Section 6.1 suggests that EOF without an alertCloseNotify
-		// is an error, but popular web sites seem to do this, so we accept it
-		// if and only if at the record boundary.
-		if err == io.ErrUnexpectedEOF && c.rawInput.Len() == 0 {
-			err = io.EOF
-		}
-		if e, ok := err.(net.Error); !ok || !e.Temporary() {
-			c.in.setErrorLocked(err)
-		}
-		return err
-	}
-
-	hdr := c.rawInput.Bytes()[:recordHeaderLen]
+	hdr := c.rawInput.Bytes()
 	typ := recordType(hdr[0])
+	vers := uint16(hdr[1])<<8 | uint16(hdr[2])
+	n := int(hdr[3])<<8 | int(hdr[4])
+	if len(hdr) < recordHeaderLen+n {
+		return io.EOF
+	}
 
 	// No valid TLS record has a type of 0x80, however SSLv2 handshakes
 	// start with a uint16 length where the MSB is set and the first record
@@ -616,8 +618,6 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		return c.in.setErrorLocked(c.newRecordHeaderError(nil, "unsupported SSLv2 handshake received"))
 	}
 
-	vers := uint16(hdr[1])<<8 | uint16(hdr[2])
-	n := int(hdr[3])<<8 | int(hdr[4])
 	if c.haveVers && c.vers != VersionTLS13 && vers != c.vers {
 		c.sendAlert(alertProtocolVersion)
 		msg := fmt.Sprintf("received record with version %x when expecting version %x", vers, c.vers)
@@ -637,16 +637,12 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		msg := fmt.Sprintf("oversized record received with length %d", n)
 		return c.in.setErrorLocked(c.newRecordHeaderError(nil, msg))
 	}
-	if err := c.readFromUntil(c.conn, recordHeaderLen+n); err != nil {
-		if e, ok := err.(net.Error); !ok || !e.Temporary() {
-			c.in.setErrorLocked(err)
-		}
-		return err
-	}
+
+	//move buffer offset
+	c.rawInput.Shift(recordHeaderLen + n)
 
 	// Process message.
-	record := c.rawInput.Next(recordHeaderLen + n)
-	data, typ, err := c.in.decrypt(record)
+	data, typ, err := c.in.decrypt(hdr[:recordHeaderLen+n])
 	if err != nil {
 		return c.in.setErrorLocked(c.sendAlert(err.(alert)))
 	}
@@ -772,21 +768,6 @@ func (r *atLeastReader) Read(p []byte) (int, error) {
 		return n, io.EOF
 	}
 	return n, err
-}
-
-// readFromUntil reads from r into c.rawInput until c.rawInput contains
-// at least n bytes or else returns an error.
-func (c *Conn) readFromUntil(r io.Reader, n int) error {
-	if c.rawInput.Len() >= n {
-		return nil
-	}
-	needs := n - c.rawInput.Len()
-	// There might be extra input waiting on the wire. Make a best effort
-	// attempt to fetch it so that it can be used in (*Conn).Read to
-	// "predict" closeNotify alerts.
-	c.rawInput.Grow(needs + bytes.MinRead)
-	_, err := c.rawInput.ReadFrom(&atLeastReader{r, int64(needs)})
-	return err
 }
 
 // sendAlert sends a TLS alert message.

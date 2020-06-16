@@ -1,4 +1,4 @@
-package qio
+package buf
 
 import (
 	"container/list"
@@ -124,24 +124,71 @@ func (buf *LinkedBuffer) MoveWritePiont(n int) (s *Segment) {
 	return s
 }
 
+func (buf *LinkedBuffer) Bytes() []byte {
+	n := buf.Buffered()
+	wp := buf.wp
+	rp := buf.rp
+	left := BLOCKSIZE - rp.pos
+	if n <= left {
+		return rp.b.data[rp.pos:wp.pos]
+	}
+	b := make([]byte, n)
+	nn := 0
+	nn += copy(b, rp.b.data[rp.pos:])
+	block := rp.b
+	for block.next != nil {
+		block = block.next
+		nn += copy(b[nn:], block.data[:min(n-nn, BLOCKSIZE)])
+	}
+	return b
+}
+
+func (buf *LinkedBuffer) Shift(n int) {
+	if n == 0 {
+		return
+	}
+	rp := buf.rp
+	left := BLOCKSIZE - rp.pos
+	if n <= left {
+		buf.rp.pos += n
+		return
+	}
+	if n > buf.Buffered() {
+		n = buf.Buffered()
+	}
+	nn := left
+	block := rp.b
+	pos := 0
+	for block.next != nil {
+		if nn >= n {
+			break
+		}
+		block = block.next
+		buf.rp.b = block
+		pos = min(n-nn, BLOCKSIZE)
+		nn += pos
+		buf.rp.pos = pos
+	}
+}
+
+func (buf *LinkedBuffer) Len() int {
+	return buf.Buffered()
+}
+
 func (buf *LinkedBuffer) Read(b []byte) (n int, err error) {
 	n = len(b)
 	if n == 0 {
 		return
 	}
-
 	wp := buf.wp
 	rp := buf.rp
 	if wp.b == rp.b && wp.pos == rp.pos {
 		err = io.EOF
 		return
 	}
-
-	fmt.Println("buffer", buf.Buffered(), n)
 	if n > buf.Buffered() {
 		n = buf.Buffered()
 	}
-
 	nn := 0
 	if len(rp.b.data[rp.pos:]) >= n {
 		buf.rp.pos += copy(b, rp.b.data[rp.pos:rp.pos+n])

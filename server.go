@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/widaT/qio/conn"
 	tls "github.com/widaT/qio/tls13"
 
 	"github.com/widaT/poller"
@@ -14,13 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type Handler func(net.Conn) error
-type ConnPair struct {
-	nConn net.Conn
-	conn  *Conn
-}
-
-var BigBuf = make([]byte, 0x10000)
+type Handler func(conn.Conn) error
 
 type Server struct {
 	poller *poller.Selector
@@ -94,28 +89,27 @@ func (s *Server) Serve(network string, addr string) error {
 				if err != nil {
 					return err
 				}
-				conn := NewConn(cfd, sa)
+				conn := conn.NewConn(cfd, sa)
 				if s.tlsConfig != nil {
-					s.connections.Store(cfd, &ConnPair{nConn: tls.Server(conn, s.tlsConfig), conn: conn})
+					s.connections.Store(cfd, tls.Server(conn, s.tlsConfig))
 				} else {
-					s.connections.Store(cfd, &ConnPair{nConn: conn, conn: conn})
+					s.connections.Store(cfd, conn)
 				}
 
 			}
 		case poller.Token(1):
-			if infoP, found := s.connections.Load(int(ev.Fd)); found {
-				info := infoP.(*ConnPair)
+			if connp, found := s.connections.Load(int(ev.Fd)); found {
+				conn := connp.(conn.Conn)
 				switch {
 				case ev.IsReadable():
 					connectionClosed := false
 					for {
-						b := info.conn.buf.NexWriteBlock()
+						b := conn.NexWriteBlock()
 						n, err := unix.Read(int(ev.Fd), b)
 						if n == 0 {
 							connectionClosed = true
 							break
 						}
-
 						if err != nil {
 							//WouldBlock
 							if err == unix.EAGAIN {
@@ -130,11 +124,10 @@ func (s *Server) Serve(network string, addr string) error {
 							connectionClosed = true
 							break
 						}
-						_ = info.conn.buf.MoveWritePiont(n)
-						fmt.Println(n)
+						conn.MoveWritePiont(n)
 						//info.conn.buf.Wrap(seg)
 					}
-					tConn, ok := info.nConn.(*tls.Conn)
+					tConn, ok := conn.(*tls.Conn)
 					if ok {
 						if !tConn.ConnectionState().HandshakeComplete {
 							err := tConn.Handshake()
@@ -142,23 +135,23 @@ func (s *Server) Serve(network string, addr string) error {
 								connectionClosed = true
 							}
 						} else {
-							err = s.handle(info.nConn)
+							err = s.handle(conn)
 							if err != nil {
 								s.connections.Delete(fd)
-								info.nConn.Close()
+								conn.Close()
 							}
 						}
 					} else {
-						err = s.handle(info.nConn)
+						err = s.handle(conn)
 						if err != nil {
 							s.connections.Delete(fd)
-							info.nConn.Close()
+							conn.Close()
 						}
 					}
 					if connectionClosed {
 						fmt.Println("connectionClosed")
 						s.connections.Delete(fd)
-						info.nConn.Close()
+						conn.Close()
 					}
 				}
 			}

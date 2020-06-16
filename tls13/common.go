@@ -20,11 +20,11 @@ import (
 
 	"io"
 	"math/big"
-	"net"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/widaT/qio/conn"
 	"golang.org/x/sys/cpu"
 )
 
@@ -374,7 +374,7 @@ type ClientHelloInfo struct {
 	// Conn is the underlying net.Conn for the connection. Do not read
 	// from, or write to, this connection; that will cause the TLS
 	// connection to fail.
-	Conn net.Conn
+	Conn conn.Conn
 
 	// config is embedded by the GetCertificate or GetConfigForClient caller,
 	// for use with SupportsCertificate.
