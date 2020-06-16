@@ -34,7 +34,6 @@ func NewServer(hander Handler) (*Server, error) {
 		return nil, err
 	}
 	server.handle = hander
-
 	return server, nil
 }
 
