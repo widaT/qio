@@ -2,7 +2,6 @@ package conn
 
 import (
 	"net"
-	"time"
 
 	"github.com/widaT/qio/buf"
 	"golang.org/x/sys/unix"
@@ -19,8 +18,7 @@ type Conn interface {
 	RemoteAddr() net.Addr
 }
 
-//Conn shoud imp net.Conn
-type conn struct {
+type QConn struct {
 	buf        *buf.LinkedBuffer
 	fd         int
 	localAddr  net.Addr // local addr
@@ -28,54 +26,43 @@ type conn struct {
 }
 
 func NewConn(fd int, sa unix.Sockaddr) Conn {
-	c := new(conn)
+	c := new(QConn)
 	c.buf = buf.New()
 	c.fd = fd
-	c.remoteAddr = SockaddrToTCPOrUnixAddr(sa)
+	c.remoteAddr = Sockaddr2TCP(sa)
 	return c
 }
 
-func (c *conn) NexWriteBlock() []byte {
+func (c *QConn) NexWriteBlock() []byte {
 	return c.buf.NexWriteBlock()
 }
 
-func (c *conn) MoveWritePiont(n int) {
+func (c *QConn) MoveWritePiont(n int) {
 	c.buf.MoveWritePiont(n)
 }
-func (c *conn) BufferPoint() *buf.LinkedBuffer {
+
+func (c *QConn) BufferPoint() *buf.LinkedBuffer {
 	return c.buf
 }
 
-func (c *conn) Read(b []byte) (n int, e error) {
+func (c *QConn) Read(b []byte) (n int, e error) {
 	n, e = c.buf.Read(b)
 	return
 }
 
-func (c *conn) Write(b []byte) (n int, err error) {
+func (c *QConn) Write(b []byte) (n int, err error) {
 	return unix.Write(c.fd, b)
 }
 
-func (c *conn) Close() error {
+func (c *QConn) Close() error {
 	c.buf.Release()
 	return unix.Close(c.fd)
 }
 
-func (c *conn) LocalAddr() net.Addr {
+func (c *QConn) LocalAddr() net.Addr {
 	return c.localAddr
 
 }
-func (c *conn) RemoteAddr() net.Addr {
+func (c *QConn) RemoteAddr() net.Addr {
 	return c.remoteAddr
-}
-
-func (c *conn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *conn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *conn) SetWriteDeadline(t time.Time) error {
-	return nil
 }

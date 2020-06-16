@@ -34,8 +34,7 @@ type serverHandshakeState struct {
 func (c *Conn) serverHandshake() error {
 	// If this is the first server handshake, we generate a random key to
 	// encrypt the tickets with.
-
-	if c.hs == nil {
+	if c.handshaker == nil {
 		c.config.serverInitOnce.Do(func() { c.config.serverInit(nil) })
 		clientHello, err := c.readClientHello()
 		if err != nil {
@@ -45,13 +44,12 @@ func (c *Conn) serverHandshake() error {
 			c.sendAlert(alertProtocolVersion)
 			return errors.New("protocol version not supported")
 		}
-		c.hs = &serverHandshakeStateTLS13{
+		c.handshaker = &serverHandshakeStateTLS13{
 			c:           c,
 			clientHello: clientHello,
 		}
-
 	}
-	return c.hs.handshake()
+	return c.handshaker.handshake()
 }
 
 // readClientHello reads a ClientHello message and selects the protocol version.

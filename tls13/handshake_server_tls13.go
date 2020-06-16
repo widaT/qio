@@ -16,9 +16,9 @@ import (
 	"time"
 )
 
-const HandshakeStateStepOne uint32 = 0
+const serverStateReadClientHello uint32 = 0
 const HandshakeStateCompleted uint32 = 1
-const HandshakeStateStepTwo uint32 = 2
+const serverStateReadClientCertVerify uint32 = 2
 
 // maxClientPSKIdentities is the number of client PSK identities the server will
 // attempt to validate. It will ignore the rest not to let cheap ClientHello
@@ -46,7 +46,7 @@ type serverHandshakeStateTLS13 struct {
 func (hs *serverHandshakeStateTLS13) handshake() error {
 	c := hs.c
 	switch c.handshakeStatus {
-	case HandshakeStateStepOne:
+	case serverStateReadClientHello:
 		// For an overview of the TLS 1.3 handshake, see RFC 8446, Section 2.
 		if err := hs.processClientHello(); err != nil {
 
@@ -79,8 +79,8 @@ func (hs *serverHandshakeStateTLS13) handshake() error {
 		if _, err := c.flush(); err != nil {
 			return err
 		}
-		atomic.StoreUint32(&c.handshakeStatus, HandshakeStateStepTwo)
-	case HandshakeStateStepTwo:
+		atomic.StoreUint32(&c.handshakeStatus, serverStateReadClientCertVerify)
+	case serverStateReadClientCertVerify:
 		if err := hs.readClientCertificate(); err != nil {
 			return err
 		}

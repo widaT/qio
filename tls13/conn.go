@@ -113,8 +113,8 @@ type Conn struct {
 	// in Conn.Write.
 	activeCall int32
 
-	tmp [16]byte
-	hs  Handshaker
+	tmp        [16]byte
+	handshaker Handshaker
 }
 
 // Access to net.Conn methods.
