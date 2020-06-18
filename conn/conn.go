@@ -51,7 +51,14 @@ func (c *QConn) Read(b []byte) (n int, e error) {
 }
 
 func (c *QConn) Write(b []byte) (n int, err error) {
-	return unix.Write(c.fd, b)
+	n, err = unix.Write(c.fd, b)
+	if err != nil {
+		if err == unix.EAGAIN {
+			err = nil
+			return
+		}
+	}
+	return
 }
 
 func (c *QConn) Close() error {

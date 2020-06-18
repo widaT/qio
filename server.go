@@ -1,17 +1,17 @@
 package qio
 
 import (
-	"fmt"
 	"log"
 	"net"
+	"runtime"
 	"sync"
-
-	"github.com/widaT/qio/conn"
-	tls "github.com/widaT/qio/tls13"
+	"sync/atomic"
 
 	"github.com/widaT/poller"
 	"github.com/widaT/poller/interest"
 	"github.com/widaT/poller/pollopt"
+	"github.com/widaT/qio/conn"
+	tls "github.com/widaT/qio/tls13"
 	"golang.org/x/sys/unix"
 )
 
@@ -20,10 +20,10 @@ type Handler func(conn.Conn) error
 type Server struct {
 	poller *poller.Selector
 	//ln   *listener
-	handle Handler
-
-	connections sync.Map
-	tlsConfig   *tls.Config
+	handle    Handler
+	mainEl    *EventLoop
+	subEl     *EventLoop
+	tlsConfig *tls.Config
 }
 
 func NewServer(hander Handler) (*Server, error) {
@@ -35,6 +35,33 @@ func NewServer(hander Handler) (*Server, error) {
 	}
 	server.handle = hander
 	return server, nil
+}
+
+func (s *Server) newEventLoop() (e *EventLoop, err error) {
+	e = new(EventLoop)
+	e.poller, err = poller.New()
+	if err != nil {
+		return
+	}
+	e.id = atomic.AddUint32(&evId, 1) //so main eventloop id is 1,sub eventloop start 2
+	e.connections = make(map[int]conn.Conn)
+	e.server = s
+	e.tlsConfig = s.tlsConfig
+	e.handler = s.handle
+	return
+}
+
+func (s *Server) accept(fd int, sa unix.Sockaddr) error {
+	err := s.subEl.poller.Register(fd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
+	if err != nil {
+		return err
+	}
+	conn := conn.NewConn(fd, sa)
+	if s.tlsConfig != nil {
+		conn = tls.Server(conn, s.tlsConfig)
+	}
+	s.subEl.connections[fd] = conn
+	return nil
 }
 
 func (s *Server) ServeTLS(network, addr, cert, key string) {
@@ -56,107 +83,35 @@ func (s *Server) Serve(network string, addr string) error {
 	if err != nil {
 		return err
 	}
-	err = s.poller.Register(fd, poller.Token(0), interest.READABLE, pollopt.Edge)
+	s.mainEl, err = s.newEventLoop()
 	if err != nil {
 		return err
 	}
-	fn := func(ev *poller.Event) error {
 
-		/* 		defer func() {
-			if err := recover(); err != nil {
-
-				fmt.Printf("%s", err)
-			}
-		}() */
-
-		switch ev.Token() {
-		case poller.Token(0):
-			for {
-				cfd, sa, err := unix.Accept(fd)
-				if err != nil {
-					//WouldBlock
-					if err == unix.EAGAIN {
-						//	fmt.Println(err)
-						break
-					}
-					return err
-				}
-				if err := poller.Nonblock(cfd); err != nil {
-					return err
-				}
-				err = s.poller.Register(cfd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
-				if err != nil {
-					return err
-				}
-				conn := conn.NewConn(cfd, sa)
-				if s.tlsConfig != nil {
-					s.connections.Store(cfd, tls.Server(conn, s.tlsConfig))
-				} else {
-					s.connections.Store(cfd, conn)
-				}
-
-			}
-		case poller.Token(1):
-			if connp, found := s.connections.Load(int(ev.Fd)); found {
-				conn := connp.(conn.Conn)
-				switch {
-				case ev.IsReadable():
-					connectionClosed := false
-					for {
-						b := conn.NexWriteBlock()
-						n, err := unix.Read(int(ev.Fd), b)
-						if n == 0 {
-							connectionClosed = true
-							break
-						}
-						if err != nil {
-							//WouldBlock
-							if err == unix.EAGAIN {
-								break
-							}
-							//Interrupted
-							if err == unix.EINTR {
-								continue
-							}
-							//防止 connection reset by peer 的情况下程序退出
-							log.Println(err)
-							connectionClosed = true
-							break
-						}
-						conn.MoveWritePiont(n)
-						//info.conn.buf.Wrap(seg)
-					}
-					tConn, ok := conn.(*tls.Conn)
-					if ok {
-						if !tConn.ConnectionState().HandshakeComplete {
-							err := tConn.Handshake()
-							if err != nil {
-								connectionClosed = true
-							}
-						} else {
-							err = s.handle(conn)
-							if err != nil {
-								s.connections.Delete(fd)
-								conn.Close()
-							}
-						}
-					} else {
-						err = s.handle(conn)
-						if err != nil {
-							s.connections.Delete(fd)
-							conn.Close()
-						}
-					}
-					if connectionClosed {
-						fmt.Println("connectionClosed")
-						s.connections.Delete(fd)
-						conn.Close()
-					}
-				}
-			}
-		}
-		return nil
+	err = s.mainEl.poller.Register(fd, poller.Token(0), interest.READABLE, pollopt.Edge)
+	if err != nil {
+		return err
 	}
-	poller.Polling(s.poller, fn)
+
+	s.subEl, err = s.newEventLoop()
+	if err != nil {
+		return err
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		runtime.LockOSThread()
+		s.mainEl.run()
+		wg.Done()
+	}()
+
+	go func() {
+		runtime.LockOSThread()
+		s.subEl.run()
+		wg.Done()
+	}()
+	wg.Wait()
+
 	return nil
 }

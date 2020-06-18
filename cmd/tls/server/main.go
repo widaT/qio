@@ -11,12 +11,15 @@ import (
 func main() {
 
 	handle := func(conn conn.Conn) error {
-		b := make([]byte, 0x10000)
+		b := make([]byte, 1024)
 		n, err := conn.Read(b)
-		fmt.Printf("receive %d \n", n)
+		fmt.Printf("receive %s \n", b[:n])
 		if err != nil {
 			return err
 		}
+
+		conn.Write(b[:n])
+
 		return nil
 	}
 	server, err := qio.NewServer(handle)

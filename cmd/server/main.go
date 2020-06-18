@@ -14,7 +14,6 @@ func main() {
 	handle := func(conn conn.Conn) error {
 		b := make([]byte, 0x10000)
 		n, err := conn.Read(b)
-		fmt.Println(n)
 		if err != nil {
 			//return err
 			if err == io.EOF {
@@ -22,7 +21,7 @@ func main() {
 			}
 			return err
 		}
-		fmt.Printf("------%d ------ ", n)
+		fmt.Printf("%s", b[:n])
 		return nil
 	}
 	server, err := qio.NewServer(handle)
