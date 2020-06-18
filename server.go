@@ -12,34 +12,34 @@ import (
 	"github.com/widaT/poller/pollopt"
 	"github.com/widaT/qio/conn"
 	tls "github.com/widaT/qio/tls13"
-	"golang.org/x/sys/unix"
 )
 
-type Handler func(conn.Conn) error
+var ServerToken = poller.NextToken()
+var ClientToken = poller.NextToken()
 
 type Server struct {
-	poller *poller.Selector
+	poller *poller.Poller
 	//ln   *listener
-	handle    Handler
-	mainEl    *EventLoop
-	subEl     *EventLoop
-	tlsConfig *tls.Config
+	evServer      EventServer
+	mainEventLoop *EventLoop
+	subEventLoop  *EventLoop
+	tlsConfig     *tls.Config
 }
 
-func NewServer(hander Handler) (*Server, error) {
+func NewServer(evServer EventServer) (*Server, error) {
 	server := new(Server)
 	var err error
-	server.poller, err = poller.New()
+	server.poller, err = poller.NewPoller()
 	if err != nil {
 		return nil, err
 	}
-	server.handle = hander
+	server.evServer = evServer
 	return server, nil
 }
 
 func (s *Server) newEventLoop() (e *EventLoop, err error) {
 	e = new(EventLoop)
-	e.poller, err = poller.New()
+	e.poller, err = poller.NewPoller()
 	if err != nil {
 		return
 	}
@@ -47,21 +47,8 @@ func (s *Server) newEventLoop() (e *EventLoop, err error) {
 	e.connections = make(map[int]conn.Conn)
 	e.server = s
 	e.tlsConfig = s.tlsConfig
-	e.handler = s.handle
+	e.evServer = s.evServer
 	return
-}
-
-func (s *Server) accept(fd int, sa unix.Sockaddr) error {
-	err := s.subEl.poller.Register(fd, poller.Token(1), interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
-	if err != nil {
-		return err
-	}
-	conn := conn.NewConn(fd, sa)
-	if s.tlsConfig != nil {
-		conn = tls.Server(conn, s.tlsConfig)
-	}
-	s.subEl.connections[fd] = conn
-	return nil
 }
 
 func (s *Server) ServeTLS(network, addr, cert, key string) {
@@ -83,17 +70,17 @@ func (s *Server) Serve(network string, addr string) error {
 	if err != nil {
 		return err
 	}
-	s.mainEl, err = s.newEventLoop()
+	s.mainEventLoop, err = s.newEventLoop()
 	if err != nil {
 		return err
 	}
 
-	err = s.mainEl.poller.Register(fd, poller.Token(0), interest.READABLE, pollopt.Edge)
+	err = s.mainEventLoop.poller.Register(fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
 	if err != nil {
 		return err
 	}
 
-	s.subEl, err = s.newEventLoop()
+	s.subEventLoop, err = s.newEventLoop()
 	if err != nil {
 		return err
 	}
@@ -101,17 +88,16 @@ func (s *Server) Serve(network string, addr string) error {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
-		runtime.LockOSThread()
-		s.mainEl.run()
+		//runtime.LockOSThread()
+		s.mainEventLoop.run()
 		wg.Done()
 	}()
 
 	go func() {
 		runtime.LockOSThread()
-		s.subEl.run()
+		s.subEventLoop.run()
 		wg.Done()
 	}()
 	wg.Wait()
-
 	return nil
 }

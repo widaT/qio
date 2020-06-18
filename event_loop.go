@@ -1,10 +1,11 @@
 package qio
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/widaT/poller"
+	"github.com/widaT/poller/interest"
+	"github.com/widaT/poller/pollopt"
 	"github.com/widaT/qio/conn"
 	tls "github.com/widaT/qio/tls13"
 	"golang.org/x/sys/unix"
@@ -15,9 +16,9 @@ var evId uint32
 type EventLoop struct {
 	id          uint32
 	server      *Server
-	poller      *poller.Selector
+	poller      *poller.Poller
 	connections map[int]conn.Conn
-	handler     Handler
+	evServer    EventServer
 	tlsConfig   *tls.Config
 }
 
@@ -29,12 +30,26 @@ func (e *EventLoop) close() {
 
 func (e *EventLoop) run() {
 	defer e.close()
-	log.Printf("ev %d exit err:%s", e.id, poller.Polling(e.poller, e.handleEvent))
+	log.Printf("ev %d exit err:%s", e.id, e.poller.Polling(e.handleEvent))
+}
+
+func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
+	err := e.server.subEventLoop.poller.Register(fd, ClientToken, interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
+	if err != nil {
+		return err
+	}
+	conn := conn.NewConn(fd, sa)
+	if e.tlsConfig != nil {
+		conn = tls.Server(conn, e.tlsConfig)
+	}
+	e.server.subEventLoop.connections[fd] = conn
+	e.evServer.OnContect(conn)
+	return nil
 }
 
 func (e *EventLoop) handleEvent(ev *poller.Event) error {
 	switch ev.Token() {
-	case poller.Token(0):
+	case ServerToken:
 		for {
 			cfd, sa, err := unix.Accept(int(ev.Fd))
 			if err != nil {
@@ -48,9 +63,9 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 			if err := poller.Nonblock(cfd); err != nil {
 				return err
 			}
-			e.server.accept(cfd, sa)
+			e.accept(cfd, sa)
 		}
-	case poller.Token(1):
+	case ClientToken:
 		if conn, found := e.connections[int(ev.Fd)]; found {
 			switch {
 			case ev.IsReadable():
@@ -80,29 +95,29 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					//info.conn.buf.Wrap(seg)
 				}
 				tConn, ok := conn.(*tls.Conn)
+				var err error
 				if ok {
 					if !tConn.ConnectionState().HandshakeComplete {
-						err := tConn.Handshake()
+						err = tConn.Handshake()
 						if err != nil {
 							connectionClosed = true
 						}
 					} else {
-						err := e.handler(conn)
+						err = e.evServer.OnMessage(conn)
 						if err != nil {
-							delete(e.connections, int(ev.Fd))
-							conn.Close()
+							connectionClosed = true
 						}
 					}
 				} else {
-					err := e.handler(conn)
+					err = e.evServer.OnMessage(conn)
 					if err != nil {
-						delete(e.connections, int(ev.Fd))
-						conn.Close()
+						connectionClosed = true
 					}
 				}
 				if connectionClosed {
-					fmt.Println("connectionClosed")
+					log.Printf("conn %s connectionClosed err:%s", conn.RemoteAddr(), err)
 					delete(e.connections, int(ev.Fd))
+					e.evServer.OnClose(conn)
 					conn.Close()
 				}
 			}

@@ -9,22 +9,26 @@ import (
 	"github.com/widaT/qio/conn"
 )
 
-func main() {
+type Server struct {
+	*qio.DefaultEvServer
+}
 
-	handle := func(conn conn.Conn) error {
-		b := make([]byte, 0x10000)
-		n, err := conn.Read(b)
-		if err != nil {
-			//return err
-			if err == io.EOF {
-				return nil
-			}
-			return err
+func (s *Server) OnMessage(conn conn.Conn) error {
+	b := make([]byte, 0x10000)
+	n, err := conn.Read(b)
+	if err != nil {
+		//return err
+		if err == io.EOF {
+			return nil
 		}
-		fmt.Printf("%s", b[:n])
-		return nil
+		return err
 	}
-	server, err := qio.NewServer(handle)
+	fmt.Printf("%s", b[:n])
+	return nil
+}
+
+func main() {
+	server, err := qio.NewServer(new(Server))
 	if err != nil {
 		log.Fatal(err)
 	}
