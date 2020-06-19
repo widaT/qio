@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"strings"
 
 	"github.com/widaT/qio/conn"
@@ -36,68 +35,6 @@ func Server(conn conn.Conn, config *Config) *Conn {
 	return &Conn{conn: conn, config: config}
 }
 
-// Client returns a new TLS client side connection
-// using conn as the underlying transport.
-// The config cannot be nil: users must set either ServerName or
-// InsecureSkipVerify in the config.
-func Client(conn conn.Conn, config *Config) *Conn {
-	return &Conn{conn: conn, config: config, isClient: true}
-}
-
-// A listener implements a network listener (net.Listener) for TLS connections.
-type listener struct {
-	net.Listener
-	config *Config
-}
-
-// Accept waits for and returns the next incoming TLS connection.
-// The returned connection is of type *Conn.
-/* func (l *listener) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	return Server(c, l.config), nil
-} */
-
-// NewListener creates a Listener which accepts connections from an inner
-// Listener and wraps each connection with Server.
-// The configuration config must be non-nil and must include
-// at least one certificate or else set GetCertificate.
-func NewListener(inner net.Listener, config *Config) net.Listener {
-	l := new(listener)
-	l.Listener = inner
-	l.config = config
-	return l
-}
-
-// Listen creates a TLS listener accepting connections on the
-// given network address using net.Listen.
-// The configuration config must be non-nil and must include
-// at least one certificate or else set GetCertificate.
-func Listen(network, laddr string, config *Config) (net.Listener, error) {
-	if config == nil || len(config.Certificates) == 0 &&
-		config.GetCertificate == nil && config.GetConfigForClient == nil {
-		return nil, errors.New("tls: neither Certificates, GetCertificate, nor GetConfigForClient set in Config")
-	}
-	l, err := net.Listen(network, laddr)
-	if err != nil {
-		return nil, err
-	}
-	return NewListener(l, config), nil
-}
-
-type timeoutError struct{}
-
-func (timeoutError) Error() string   { return "tls: DialWithDialer timed out" }
-func (timeoutError) Timeout() bool   { return true }
-func (timeoutError) Temporary() bool { return true }
-
-// LoadX509KeyPair reads and parses a public/private key pair from a pair
-// of files. The files must contain PEM encoded data. The certificate file
-// may contain intermediate certificates following the leaf certificate to
-// form a certificate chain. On successful return, Certificate.Leaf will
-// be nil because the parsed form of the certificate is not retained.
 func LoadX509KeyPair(certFile, keyFile string) (Certificate, error) {
 	certPEMBlock, err := ioutil.ReadFile(certFile)
 	if err != nil {

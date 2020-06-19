@@ -504,24 +504,18 @@ func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, err
 			nonce = hc.seq[:]
 		}
 
-		if hc.version == VersionTLS13 {
-			record = append(record, payload...)
+		record = append(record, payload...)
 
-			// Encrypt the actual ContentType and replace the plaintext one.
-			record = append(record, record[0])
-			record[0] = byte(recordTypeApplicationData)
+		// Encrypt the actual ContentType and replace the plaintext one.
+		record = append(record, record[0])
+		record[0] = byte(recordTypeApplicationData)
 
-			n := len(payload) + 1 + c.Overhead()
-			record[3] = byte(n >> 8)
-			record[4] = byte(n)
+		n := len(payload) + 1 + c.Overhead()
+		record[3] = byte(n >> 8)
+		record[4] = byte(n)
 
-			record = c.Seal(record[:recordHeaderLen],
-				nonce, record[recordHeaderLen:], record[:recordHeaderLen])
-		} else {
-			copy(hc.additionalData[:], hc.seq[:])
-			copy(hc.additionalData[8:], record)
-			record = c.Seal(record, nonce, payload, hc.additionalData[:])
-		}
+		record = c.Seal(record[:recordHeaderLen],
+			nonce, record[recordHeaderLen:], record[:recordHeaderLen])
 	case cbcMode:
 		blockSize := c.BlockSize()
 		plaintextLen := len(payload) + len(mac)
@@ -612,10 +606,6 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		return io.EOF
 	}
 
-	// No valid TLS record has a type of 0x80, however SSLv2 handshakes
-	// start with a uint16 length where the MSB is set and the first record
-	// is always < 256 bytes long. Therefore typ == 0x80 strongly suggests
-	// an SSLv2 client.
 	if !handshakeComplete && typ == 0x80 {
 		c.sendAlert(alertProtocolVersion)
 		return c.in.setErrorLocked(c.newRecordHeaderError(nil, "unsupported SSLv2 handshake received"))
@@ -627,10 +617,6 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		return c.in.setErrorLocked(c.newRecordHeaderError(nil, msg))
 	}
 	if !c.haveVers {
-		// First message, be extra suspicious: this might not be a TLS
-		// client. Bail out before reading a full 'body', if possible.
-		// The current max version is 3.3 so if the version is >= 16.0,
-		// it's probably not real.
 		if (typ != recordTypeAlert && typ != recordTypeHandshake) || vers >= 0x1000 {
 			return c.in.setErrorLocked(c.newRecordHeaderError(c.conn, "first record does not look like a TLS handshake"))
 		}
@@ -679,18 +665,7 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		if alert(data[1]) == alertCloseNotify {
 			return c.in.setErrorLocked(io.EOF)
 		}
-		if c.vers == VersionTLS13 {
-			return c.in.setErrorLocked(&net.OpError{Op: "remote error", Err: alert(data[1])})
-		}
-		switch data[0] {
-		case alertLevelWarning:
-			// Drop the record on the floor and retry.
-			return c.retryReadRecord(expectChangeCipherSpec)
-		case alertLevelError:
-			return c.in.setErrorLocked(&net.OpError{Op: "remote error", Err: alert(data[1])})
-		default:
-			return c.in.setErrorLocked(c.sendAlert(alertUnexpectedMessage))
-		}
+		return c.in.setErrorLocked(&net.OpError{Op: "remote error", Err: alert(data[1])})
 
 	case recordTypeChangeCipherSpec:
 		if len(data) != 1 || data[0] != 1 {
@@ -700,20 +675,7 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		if c.hand.Len() > 0 {
 			return c.in.setErrorLocked(c.sendAlert(alertUnexpectedMessage))
 		}
-		// In TLS 1.3, change_cipher_spec records are ignored until the
-		// Finished. See RFC 8446, Appendix D.4. Note that according to Section
-		// 5, a server can send a ChangeCipherSpec before its ServerHello, when
-		// c.vers is still unset. That's not useful though and suspicious if the
-		// server then selects a lower protocol version, so don't allow that.
-		if c.vers == VersionTLS13 {
-			return c.retryReadRecord(expectChangeCipherSpec)
-		}
-		if !expectChangeCipherSpec {
-			return c.in.setErrorLocked(c.sendAlert(alertUnexpectedMessage))
-		}
-		if err := c.in.changeCipherSpec(); err != nil {
-			return c.in.setErrorLocked(c.sendAlert(err.(alert)))
-		}
+		return c.retryReadRecord(expectChangeCipherSpec)
 
 	case recordTypeApplicationData:
 		if !handshakeComplete || expectChangeCipherSpec {
@@ -800,35 +762,11 @@ func (c *Conn) sendAlert(err alert) error {
 }
 
 const (
-	// tcpMSSEstimate is a conservative estimate of the TCP maximum segment
-	// size (MSS). A constant is used, rather than querying the kernel for
-	// the actual MSS, to avoid complexity. The value here is the IPv6
-	// minimum MTU (1280 bytes) minus the overhead of an IPv6 header (40
-	// bytes) and a TCP header with timestamps (32 bytes).
 	tcpMSSEstimate = 1208
 
-	// recordSizeBoostThreshold is the number of bytes of application data
-	// sent after which the TLS record size will be increased to the
-	// maximum.
 	recordSizeBoostThreshold = 128 * 1024
 )
 
-// maxPayloadSizeForWrite returns the maximum TLS payload size to use for the
-// next application data record. There is the following trade-off:
-//
-//   - For latency-sensitive applications, such as web browsing, each TLS
-//     record should fit in one TCP segment.
-//   - For throughput-sensitive applications, such as large file transfers,
-//     larger TLS records better amortize framing and encryption overheads.
-//
-// A simple heuristic that works well in practice is to use small records for
-// the first 1MB of data, then use larger records for subsequent data, and
-// reset back to smaller records after the connection becomes idle. See "High
-// Performance Web Networking", Chapter 4, or:
-// https://www.igvita.com/2013/10/24/optimizing-tls-record-size-and-buffering-latency/
-//
-// In the interests of simplicity and determinism, this code does not attempt
-// to reset the record size once the connection is idle, however.
 func (c *Conn) maxPayloadSizeForWrite(typ recordType) int {
 	if c.config.DynamicRecordSizingDisabled || typ != recordTypeApplicationData {
 		return maxPlaintext
@@ -986,25 +924,11 @@ func (c *Conn) readHandshake() (interface{}, error) {
 	case typeServerHello:
 		m = new(serverHelloMsg)
 	case typeNewSessionTicket:
-		if c.vers == VersionTLS13 {
-			m = new(newSessionTicketMsgTLS13)
-		} else {
-			m = new(newSessionTicketMsg)
-		}
+		m = new(newSessionTicketMsgTLS13)
 	case typeCertificate:
-		if c.vers == VersionTLS13 {
-			m = new(certificateMsgTLS13)
-		} else {
-			m = new(certificateMsg)
-		}
+		m = new(certificateMsgTLS13)
 	case typeCertificateRequest:
-		if c.vers == VersionTLS13 {
-			m = new(certificateRequestMsgTLS13)
-		} else {
-			m = &certificateRequestMsg{
-				hasSignatureAlgorithm: c.vers >= VersionTLS12,
-			}
-		}
+		m = new(certificateRequestMsgTLS13)
 	case typeCertificateStatus:
 		m = new(certificateStatusMsg)
 	case typeServerKeyExchange:
@@ -1102,57 +1026,9 @@ func (c *Conn) Write(b []byte) (int, error) {
 	return n + m, c.out.setErrorLocked(err)
 }
 
-// handleRenegotiation processes a HelloRequest handshake message.
-func (c *Conn) handleRenegotiation() error {
-	if c.vers == VersionTLS13 {
-		return errors.New("tls: internal error: unexpected renegotiation")
-	}
-
-	msg, err := c.readHandshake()
-	if err != nil {
-		return err
-	}
-
-	helloReq, ok := msg.(*helloRequestMsg)
-	if !ok {
-		c.sendAlert(alertUnexpectedMessage)
-		return unexpectedMessageError(helloReq, msg)
-	}
-
-	if !c.isClient {
-		return c.sendAlert(alertNoRenegotiation)
-	}
-
-	switch c.config.Renegotiation {
-	case RenegotiateNever:
-		return c.sendAlert(alertNoRenegotiation)
-	case RenegotiateOnceAsClient:
-		if c.handshakes > 1 {
-			return c.sendAlert(alertNoRenegotiation)
-		}
-	case RenegotiateFreelyAsClient:
-		// Ok.
-	default:
-		c.sendAlert(alertInternalError)
-		return errors.New("tls: unknown Renegotiation value")
-	}
-
-	c.handshakeMutex.Lock()
-	defer c.handshakeMutex.Unlock()
-
-	atomic.StoreUint32(&c.handshakeStatus, 0)
-	if c.handshakeErr = c.clientHandshake(); c.handshakeErr == nil {
-		c.handshakes++
-	}
-	return c.handshakeErr
-}
-
 // handlePostHandshakeMessage processes a handshake message arrived after the
 // handshake is complete. Up to TLS 1.2, it indicates the start of a renegotiation.
 func (c *Conn) handlePostHandshakeMessage() error {
-	if c.vers != VersionTLS13 {
-		return c.handleRenegotiation()
-	}
 
 	msg, err := c.readHandshake()
 	if err != nil {
@@ -1286,17 +1162,6 @@ func (c *Conn) Close() error {
 
 var errEarlyCloseWrite = errors.New("tls: CloseWrite called before handshake complete")
 
-// CloseWrite shuts down the writing side of the connection. It should only be
-// called once the handshake has completed and does not call CloseWrite on the
-// underlying connection. Most callers should just use Close.
-func (c *Conn) CloseWrite() error {
-	if !c.handshakeComplete() {
-		return errEarlyCloseWrite
-	}
-
-	return c.closeNotify()
-}
-
 func (c *Conn) closeNotify() error {
 	c.out.Lock()
 	defer c.out.Unlock()
@@ -1326,11 +1191,7 @@ func (c *Conn) Handshake() error {
 	c.in.Lock()
 	defer c.in.Unlock()
 
-	if c.isClient {
-		c.handshakeErr = c.clientHandshake()
-	} else {
-		c.handshakeErr = c.serverHandshake()
-	}
+	c.handshakeErr = c.serverHandshake()
 	if c.handshakeErr == nil {
 		c.handshakes++
 	} else {
@@ -1389,24 +1250,6 @@ func (c *Conn) OCSPResponse() []byte {
 	defer c.handshakeMutex.Unlock()
 
 	return c.ocspResponse
-}
-
-// VerifyHostname checks that the peer certificate chain is valid for
-// connecting to host. If so, it returns nil; if not, it returns an error
-// describing the problem.
-func (c *Conn) VerifyHostname(host string) error {
-	c.handshakeMutex.Lock()
-	defer c.handshakeMutex.Unlock()
-	if !c.isClient {
-		return errors.New("tls: VerifyHostname called on TLS server connection")
-	}
-	if !c.handshakeComplete() {
-		return errors.New("tls: handshake has not yet been performed")
-	}
-	if len(c.verifiedChains) == 0 {
-		return errors.New("tls: handshake did not verify certificate chain")
-	}
-	return c.peerCertificates[0].VerifyHostname(host)
 }
 
 func (c *Conn) handshakeComplete() bool {

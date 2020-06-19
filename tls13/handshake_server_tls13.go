@@ -60,7 +60,6 @@ func (hs *serverHandshakeStateTLS13) handshake() error {
 
 			return err
 		}
-		//c.buffering = true
 		if err := hs.sendServerParameters(); err != nil {
 
 			return err
