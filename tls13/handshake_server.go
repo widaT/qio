@@ -31,8 +31,6 @@ type serverHandshakeState struct {
 
 // serverHandshake performs a TLS handshake as a server.
 func (c *Conn) serverHandshake() error {
-	// If this is the first server handshake, we generate a random key to
-	// encrypt the tickets with.
 	if c.handshaker == nil {
 		c.config.serverInitOnce.Do(func() { c.config.serverInit(nil) })
 		clientHello, err := c.readClientHello()
@@ -51,7 +49,6 @@ func (c *Conn) serverHandshake() error {
 	return c.handshaker.handshake()
 }
 
-// readClientHello reads a ClientHello message and selects the protocol version.
 func (c *Conn) readClientHello() (*clientHelloMsg, error) {
 	msg, err := c.readHandshake()
 	if err != nil {
@@ -90,8 +87,6 @@ func (c *Conn) readClientHello() (*clientHelloMsg, error) {
 	return clientHello, nil
 }
 
-// supportsECDHE returns whether ECDHE key exchanges can be used with this
-// pre-TLS 1.3 client.
 func supportsECDHE(c *Config, supportedCurves []CurveID, supportedPoints []uint8) bool {
 	supportsCurve := false
 	for _, curve := range supportedCurves {
@@ -112,9 +107,6 @@ func supportsECDHE(c *Config, supportedCurves []CurveID, supportedPoints []uint8
 	return supportsCurve && supportsPointFormat
 }
 
-// processCertsFromClient takes a chain of client certificates either from a
-// Certificates message or from a sessionState and verifies them. It returns
-// the public key of the leaf certificate.
 func (c *Conn) processCertsFromClient(certificate Certificate) error {
 	certificates := certificate.Certificate
 	certs := make([]*x509.Certificate, len(certificates))

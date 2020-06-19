@@ -17,9 +17,6 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-// This file contains the functions necessary to compute the TLS 1.3 key
-// schedule. See RFC 8446, Section 7.
-
 const (
 	resumptionBinderLabel         = "res binder"
 	clientHandshakeTrafficLabel   = "c hs traffic"

@@ -17,7 +17,6 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/widaT/qio/buf"
 	"github.com/widaT/qio/conn"
@@ -31,8 +30,7 @@ type Handshaker interface {
 // It implements the net.Conn interface.
 type Conn struct {
 	// constant
-	conn     conn.Conn
-	isClient bool
+	conn conn.Conn
 
 	// handshakeStatus is 1 if the connection is currently transferring
 	// application data (i.e. is not currently processing a handshake).
@@ -144,26 +142,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-// SetDeadline sets the read and write deadlines associated with the connection.
-// A zero value for t means Read and Write will not time out.
-// After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
-/* func (c *Conn) SetDeadline(t time.Time) error {
-	return c.conn.SetDeadline(t)
-}
-*/
-// SetReadDeadline sets the read deadline on the underlying connection.
-// A zero value for t means Read will not time out.
-/* func (c *Conn) SetReadDeadline(t time.Time) error {
-	return c.conn.SetReadDeadline(t)
-} */
-
-// SetWriteDeadline sets the write deadline on the underlying connection.
-// A zero value for t means Write will not time out.
-// After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
-/* func (c *Conn) SetWriteDeadline(t time.Time) error {
-	return c.conn.SetWriteDeadline(t)
-}
-*/
 // A halfConn represents one direction of the record layer
 // connection, either sending or receiving.
 type halfConn struct {
@@ -229,9 +207,6 @@ func (hc *halfConn) incSeq() {
 		}
 	}
 
-	// Not allowed to let sequence number wrap.
-	// Instead, must renegotiate before it does.
-	// Not likely enough to bother.
 	panic("TLS: sequence number wraparound")
 }
 
@@ -372,12 +347,6 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 			}
 			c.CryptBlocks(payload, payload)
 
-			// In a limited attempt to protect against CBC padding oracles like
-			// Lucky13, the data past paddingLen (which is secret) is passed to
-			// the MAC function as extra data, to be fed into the HMAC after
-			// computing the digest. This makes the MAC roughly constant time as
-			// long as the digest computation is constant time and does not
-			// affect the subsequent write, modulo cache effects.
 			paddingLen, paddingGood = extractPadding(payload)
 		default:
 			panic("unknown cipher type")
@@ -419,13 +388,6 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 		remoteMAC := payload[n : n+macSize]
 		localMAC := hc.mac.MAC(hc.seq[0:], record[:recordHeaderLen], payload[:n], payload[n+macSize:])
 
-		// This is equivalent to checking the MACs and paddingGood
-		// separately, but in constant-time to prevent distinguishing
-		// padding failures from MAC failures. Depending on what value
-		// of paddingLen was returned on bad padding, distinguishing
-		// bad MAC from bad padding can lead to an attack.
-		//
-		// See also the logic at the end of extractPadding.
 		macAndPaddingGood := subtle.ConstantTimeCompare(localMAC, remoteMAC) & int(paddingGood)
 		if macAndPaddingGood != 1 {
 			return nil, 0, alertBadRecordMAC
@@ -438,9 +400,6 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 	return plaintext, typ, nil
 }
 
-// sliceForAppend extends the input slice by n bytes. head is the full extended
-// slice, while tail is the appended part. If the original slice has sufficient
-// capacity no allocation is performed.
 func sliceForAppend(in []byte, n int) (head, tail []byte) {
 	if total := len(in) + n; cap(in) >= total {
 		head = in[:total]
@@ -452,8 +411,6 @@ func sliceForAppend(in []byte, n int) (head, tail []byte) {
 	return
 }
 
-// encrypt encrypts payload, adding the appropriate nonce and/or MAC, and
-// appends it to record, which contains the record header.
 func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, error) {
 	if hc.cipher == nil {
 		return append(record, payload...), nil
@@ -463,15 +420,6 @@ func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, err
 	if explicitNonceLen := hc.explicitNonceLen(); explicitNonceLen > 0 {
 		record, explicitNonce = sliceForAppend(record, explicitNonceLen)
 		if _, isCBC := hc.cipher.(cbcMode); !isCBC && explicitNonceLen < 16 {
-			// The AES-GCM construction in TLS has an explicit nonce so that the
-			// nonce can be random. However, the nonce is only 8 bytes which is
-			// too small for a secure, random nonce. Therefore we use the
-			// sequence number as the nonce. The 3DES-CBC construction also has
-			// an 8 bytes nonce but its nonces must be unpredictable (see RFC
-			// 5246, Appendix F.3), forcing us to use randomness. That's not
-			// 3DES' biggest problem anyway because the birthday bound on block
-			// collision is reached first due to its simlarly small block size
-			// (see the Sweet32 attack).
 			copy(explicitNonce, hc.seq[:])
 		} else {
 			if _, err := io.ReadFull(rand, explicitNonce); err != nil {
@@ -538,16 +486,9 @@ func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, err
 
 // RecordHeaderError is returned when a TLS record header is invalid.
 type RecordHeaderError struct {
-	// Msg contains a human readable string that describes the error.
-	Msg string
-	// RecordHeader contains the five bytes of TLS record header that
-	// triggered the error.
+	Msg          string
 	RecordHeader [5]byte
-	// Conn provides the underlying net.Conn in the case that a client
-	// sent an initial handshake that didn't look like TLS.
-	// It is nil if there's already been a handshake or a TLS alert has
-	// been written to the connection.
-	Conn conn.Conn
+	Conn         conn.Conn
 }
 
 func (e RecordHeaderError) Error() string { return "tls: " + e.Msg }
@@ -1017,108 +958,6 @@ func (c *Conn) Write(b []byte) (int, error) {
 	return n + m, c.out.setErrorLocked(err)
 }
 
-// handlePostHandshakeMessage processes a handshake message arrived after the
-// handshake is complete. Up to TLS 1.2, it indicates the start of a renegotiation.
-func (c *Conn) handlePostHandshakeMessage() error {
-
-	msg, err := c.readHandshake()
-	if err != nil {
-		return err
-	}
-
-	c.retryCount++
-	if c.retryCount > maxUselessRecords {
-		c.sendAlert(alertUnexpectedMessage)
-		return c.in.setErrorLocked(errors.New("tls: too many non-advancing records"))
-	}
-
-	switch msg := msg.(type) {
-	case *newSessionTicketMsgTLS13:
-		return c.handleNewSessionTicket(msg)
-	case *keyUpdateMsg:
-		return c.handleKeyUpdate(msg)
-	default:
-		c.sendAlert(alertUnexpectedMessage)
-		return fmt.Errorf("tls: received unexpected handshake message of type %T", msg)
-	}
-}
-
-func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
-	if !c.isClient {
-		c.sendAlert(alertUnexpectedMessage)
-		return errors.New("tls: received new session ticket from a client")
-	}
-
-	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil {
-		return nil
-	}
-
-	// See RFC 8446, Section 4.6.1.
-	if msg.lifetime == 0 {
-		return nil
-	}
-	lifetime := time.Duration(msg.lifetime) * time.Second
-	if lifetime > maxSessionTicketLifetime {
-		c.sendAlert(alertIllegalParameter)
-		return errors.New("tls: received a session ticket with invalid lifetime")
-	}
-
-	cipherSuite := cipherSuiteTLS13ByID(c.cipherSuite)
-	if cipherSuite == nil || c.resumptionSecret == nil {
-		return c.sendAlert(alertInternalError)
-	}
-
-	// Save the resumption_master_secret and nonce instead of deriving the PSK
-	// to do the least amount of work on NewSessionTicket messages before we
-	// know if the ticket will be used. Forward secrecy of resumed connections
-	// is guaranteed by the requirement for pskModeDHE.
-	session := &ClientSessionState{
-		sessionTicket:      msg.label,
-		vers:               c.vers,
-		cipherSuite:        c.cipherSuite,
-		masterSecret:       c.resumptionSecret,
-		serverCertificates: c.peerCertificates,
-		verifiedChains:     c.verifiedChains,
-		receivedAt:         c.config.time(),
-		nonce:              msg.nonce,
-		useBy:              c.config.time().Add(lifetime),
-		ageAdd:             msg.ageAdd,
-	}
-
-	cacheKey := clientSessionCacheKey(c.conn.RemoteAddr(), c.config)
-	c.config.ClientSessionCache.Put(cacheKey, session)
-
-	return nil
-}
-
-func (c *Conn) handleKeyUpdate(keyUpdate *keyUpdateMsg) error {
-	cipherSuite := cipherSuiteTLS13ByID(c.cipherSuite)
-	if cipherSuite == nil {
-		return c.in.setErrorLocked(c.sendAlert(alertInternalError))
-	}
-
-	newSecret := cipherSuite.nextTrafficSecret(c.in.trafficSecret)
-	c.in.setTrafficSecret(cipherSuite, newSecret)
-
-	if keyUpdate.updateRequested {
-		c.out.Lock()
-		defer c.out.Unlock()
-
-		msg := &keyUpdateMsg{}
-		_, err := c.writeRecordLocked(recordTypeHandshake, msg.marshal())
-		if err != nil {
-			// Surface the error at the next write.
-			c.out.setErrorLocked(err)
-			return nil
-		}
-
-		newSecret := cipherSuite.nextTrafficSecret(c.out.trafficSecret)
-		c.out.setTrafficSecret(cipherSuite, newSecret)
-	}
-
-	return nil
-}
-
 // Read can be made to time out and return a net.Error with Timeout() == true
 // after a fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *Conn) Read(b []byte) (int, error) {
@@ -1138,22 +977,9 @@ func (c *Conn) Read(b []byte) (int, error) {
 		if err := c.readRecord(); err != nil {
 			return 0, err
 		}
-		for c.hand.Len() > 0 {
-			if err := c.handlePostHandshakeMessage(); err != nil {
-				return 0, err
-			}
-		}
 	}
 
 	n, _ := c.input.Read(b)
-
-	// If a close-notify alert is waiting, read it so that we can return (n,
-	// EOF) instead of (n, nil), to signal to the HTTP response reading
-	// goroutine that the connection is now closed. This eliminates a race
-	// where the HTTP response reading goroutine would otherwise not observe
-	// the EOF until its next read, by which time a client goroutine might
-	// have already tried to reuse the HTTP connection for a new request.
-	// See https://golang.org/cl/76400046 and https://golang.org/issue/3514
 	if n != 0 && c.input.Len() == 0 && c.rawInput.Len() > 0 &&
 		recordType(c.rawInput.Bytes()[0]) == recordTypeAlert {
 		if err := c.readRecord(); err != nil {
@@ -1178,12 +1004,6 @@ func (c *Conn) Close() error {
 		}
 	}
 	if x != 0 {
-		// io.Writer and io.Closer should not be used concurrently.
-		// If Close is called while a Write is currently in-flight,
-		// interpret that as a sign that this Close is really just
-		// being used to break the Write and/or clean up resources and
-		// avoid sending the alertCloseNotify, which may block
-		// waiting on handshakeMutex or the c.out mutex.
 		return c.conn.Close()
 	}
 

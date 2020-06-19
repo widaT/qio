@@ -20,9 +20,6 @@ const serverStateReadClientHello uint32 = 0
 const HandshakeStateCompleted uint32 = 1
 const serverStateReadClientCertVerify uint32 = 2
 
-// maxClientPSKIdentities is the number of client PSK identities the server will
-// attempt to validate. It will ignore the rest not to let cheap ClientHello
-// messages cause too much work in session ticket decryption attempts.
 const maxClientPSKIdentities = 5
 
 type serverHandshakeStateTLS13 struct {
@@ -107,16 +104,6 @@ func (hs *serverHandshakeStateTLS13) processClientHello() error {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: client used the legacy version field to negotiate TLS 1.3")
 	}
-
-	// Abort if the client is doing a fallback and landing lower than what we
-	// support. See RFC 7507, which however does not specify the interaction
-	// with supported_versions. The only difference is that with
-	// supported_versions a client has a chance to attempt a [TLS 1.2, TLS 1.4]
-	// handshake in case TLS 1.3 is broken but 1.2 is not. Alas, in that case,
-	// it will have to drop the TLS_FALLBACK_SCSV protection if it falls back to
-	// TLS 1.2, because a TLS 1.3 server would abort here. The situation before
-	// supported_versions was not better because there was just no way to do a
-	// TLS 1.4 handshake without risking the server selecting TLS 1.3.
 	for _, id := range hs.clientHello.cipherSuites {
 		if id == TLS_FALLBACK_SCSV {
 			// Use c.vers instead of max(supported_versions) because an attacker
@@ -147,12 +134,6 @@ func (hs *serverHandshakeStateTLS13) processClientHello() error {
 	}
 
 	if hs.clientHello.earlyData {
-		// See RFC 8446, Section 4.2.10 for the complicated behavior required
-		// here. The scenario is that a different server at our address offered
-		// to accept early data in the past, which we can't handle. For now, all
-		// 0-RTT enabled session tickets need to expire before a Go server can
-		// replace a server or join a pool. That's the same requirement that
-		// applies to mixing or replacing with any TLS 1.2 server.
 		c.sendAlert(alertUnsupportedExtension)
 		return errors.New("tls: client sent unexpected early data")
 	}
@@ -281,18 +262,11 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 			continue
 		}
 
-		// We don't check the obfuscated ticket age because it's affected by
-		// clock skew and it's only a freshness signal useful for shrinking the
-		// window for replay attacks, which don't affect us as we don't do 0-RTT.
-
 		pskSuite := cipherSuiteTLS13ByID(sessionState.cipherSuite)
 		if pskSuite == nil || pskSuite.hash != hs.suite.hash {
 			continue
 		}
 
-		// PSK connections don't re-establish client certificates, but carry
-		// them over in the session ticket. Ensure the presence of client certs
-		// in the ticket is consistent with the configured requirements.
 		sessionHasClientCerts := len(sessionState.certificate.Certificate) != 0
 		needClientCerts := requiresClientCert(c.config.ClientAuth)
 		if needClientCerts && !sessionHasClientCerts {
@@ -332,10 +306,6 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 
 	return nil
 }
-
-// cloneHash uses the encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
-// interfaces implemented by standard library hashes to clone the state of in
-// to a new instance of h. It returns nil if the operation fails.
 func cloneHash(in hash.Hash, h crypto.Hash) hash.Hash {
 	// Recreate the interface to avoid importing encoding.
 	type binaryMarshaler interface {
@@ -466,10 +436,6 @@ func (hs *serverHandshakeStateTLS13) doHelloRetryRequest(selectedGroup CurveID) 
 	hs.clientHello = clientHello
 	return nil
 }
-
-// illegalClientHelloChange reports whether the two ClientHello messages are
-// different, with the exception of the changes allowed before and after a
-// HelloRetryRequest. See RFC 8446, Section 4.1.2.
 func illegalClientHelloChange(ch, ch1 *clientHelloMsg) bool {
 	if len(ch.supportedVersions) != len(ch1.supportedVersions) ||
 		len(ch.cipherSuites) != len(ch1.cipherSuites) ||
