@@ -24,7 +24,6 @@ type serverHandshakeState struct {
 	ecSignOk     bool
 	rsaDecryptOk bool
 	rsaSignOk    bool
-	sessionState *sessionState
 	finishedHash finishedHash
 	masterSecret []byte
 	cert         *Certificate

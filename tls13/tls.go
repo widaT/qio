@@ -6,11 +6,6 @@
 // and TLS 1.3, as specified in RFC 8446.
 package tls
 
-// BUG(agl): The crypto/tls package only implements some countermeasures
-// against Lucky13 attacks on CBC-mode encryption, and only on SHA1
-// variants. See http://www.isg.rhul.ac.uk/tls/TLStiming.pdf and
-// https://www.imperialviolet.org/2013/02/04/luckythirteen.html.
-
 import (
 	"bytes"
 	"crypto"
@@ -27,10 +22,6 @@ import (
 	"github.com/widaT/qio/conn"
 )
 
-// Server returns a new TLS server side connection
-// using conn as the underlying transport.
-// The configuration config must be non-nil and must include
-// at least one certificate or else set GetCertificate.
 func Server(conn conn.Conn, config *Config) *Conn {
 	return &Conn{conn: conn, config: config}
 }
@@ -47,9 +38,6 @@ func LoadX509KeyPair(certFile, keyFile string) (Certificate, error) {
 	return X509KeyPair(certPEMBlock, keyPEMBlock)
 }
 
-// X509KeyPair parses a public/private key pair from a pair of
-// PEM encoded data. On successful return, Certificate.Leaf will be nil because
-// the parsed form of the certificate is not retained.
 func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 	fail := func(err error) (Certificate, error) { return Certificate{}, err }
 
@@ -97,8 +85,6 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 		skippedBlockTypes = append(skippedBlockTypes, keyDERBlock.Type)
 	}
 
-	// We don't need to parse the public key for TLS, but we so do anyway
-	// to check that it looks sane and matches the private key.
 	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
 		return fail(err)
@@ -141,9 +127,6 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 	return cert, nil
 }
 
-// Attempt to parse the given private key DER block. OpenSSL 0.9.8 generates
-// PKCS#1 private keys by default, while OpenSSL 1.0.0 generates PKCS#8 keys.
-// OpenSSL ecparam generates SEC1 EC private keys for ECDSA. We try all three.
 func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
 	if key, err := x509.ParsePKCS1PrivateKey(der); err == nil {
 		return key, nil

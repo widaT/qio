@@ -17,6 +17,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/widaT/qio/buf"
 	"github.com/widaT/qio/conn"
@@ -351,15 +352,7 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 			payload = payload[explicitNonceLen:]
 
 			additionalData := hc.additionalData[:]
-			if hc.version == VersionTLS13 {
-				additionalData = record[:recordHeaderLen]
-			} else {
-				copy(additionalData, hc.seq[:])
-				copy(additionalData[8:], record[:3])
-				n := len(payload) - c.Overhead()
-				additionalData[11] = byte(n >> 8)
-				additionalData[12] = byte(n)
-			}
+			additionalData = record[:recordHeaderLen]
 
 			var err error
 			plaintext, err = c.Open(payload[:0], nonce, payload, additionalData)
@@ -796,9 +789,7 @@ func (c *Conn) maxPayloadSizeForWrite(typ recordType) int {
 			panic("unknown cipher type")
 		}
 	}
-	if c.vers == VersionTLS13 {
-		payloadBytes-- // encrypted ContentType
-	}
+	payloadBytes-- // encrypted ContentType
 
 	// Allow packet growth in arithmetic progression up to max.
 	pkt := c.packetsSent
@@ -1052,6 +1043,54 @@ func (c *Conn) handlePostHandshakeMessage() error {
 	}
 }
 
+func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
+	if !c.isClient {
+		c.sendAlert(alertUnexpectedMessage)
+		return errors.New("tls: received new session ticket from a client")
+	}
+
+	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil {
+		return nil
+	}
+
+	// See RFC 8446, Section 4.6.1.
+	if msg.lifetime == 0 {
+		return nil
+	}
+	lifetime := time.Duration(msg.lifetime) * time.Second
+	if lifetime > maxSessionTicketLifetime {
+		c.sendAlert(alertIllegalParameter)
+		return errors.New("tls: received a session ticket with invalid lifetime")
+	}
+
+	cipherSuite := cipherSuiteTLS13ByID(c.cipherSuite)
+	if cipherSuite == nil || c.resumptionSecret == nil {
+		return c.sendAlert(alertInternalError)
+	}
+
+	// Save the resumption_master_secret and nonce instead of deriving the PSK
+	// to do the least amount of work on NewSessionTicket messages before we
+	// know if the ticket will be used. Forward secrecy of resumed connections
+	// is guaranteed by the requirement for pskModeDHE.
+	session := &ClientSessionState{
+		sessionTicket:      msg.label,
+		vers:               c.vers,
+		cipherSuite:        c.cipherSuite,
+		masterSecret:       c.resumptionSecret,
+		serverCertificates: c.peerCertificates,
+		verifiedChains:     c.verifiedChains,
+		receivedAt:         c.config.time(),
+		nonce:              msg.nonce,
+		useBy:              c.config.time().Add(lifetime),
+		ageAdd:             msg.ageAdd,
+	}
+
+	cacheKey := clientSessionCacheKey(c.conn.RemoteAddr(), c.config)
+	c.config.ClientSessionCache.Put(cacheKey, session)
+
+	return nil
+}
+
 func (c *Conn) handleKeyUpdate(keyUpdate *keyUpdateMsg) error {
 	cipherSuite := cipherSuiteTLS13ByID(c.cipherSuite)
 	if cipherSuite == nil {
@@ -1254,4 +1293,23 @@ func (c *Conn) OCSPResponse() []byte {
 
 func (c *Conn) handshakeComplete() bool {
 	return atomic.LoadUint32(&c.handshakeStatus) == 1
+}
+
+func clientSessionCacheKey(serverAddr net.Addr, config *Config) string {
+	if len(config.ServerName) > 0 {
+		return config.ServerName
+	}
+	return serverAddr.String()
+}
+
+func mutualProtocol(protos, preferenceProtos []string) (string, bool) {
+	for _, s := range preferenceProtos {
+		for _, c := range protos {
+			if s == c {
+				return s, false
+			}
+		}
+	}
+
+	return protos[0], true
 }

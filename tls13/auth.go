@@ -143,10 +143,6 @@ func legacyTypeAndHashFromPublicKey(pub crypto.PublicKey) (sigType uint8, hash c
 	case *ecdsa.PublicKey:
 		return signatureECDSA, crypto.SHA1, nil
 	case ed25519.PublicKey:
-		// RFC 8422 specifies support for Ed25519 in TLS 1.0 and 1.1,
-		// but it requires holding on to a handshake transcript to do a
-		// full signature, and not even OpenSSL bothers with the
-		// complexity, so we can't even test it properly.
 		return 0, 0, fmt.Errorf("tls: Ed25519 public keys are not supported before TLS 1.2")
 	default:
 		return 0, 0, fmt.Errorf("tls: unsupported public key: %T", pub)
@@ -172,11 +168,6 @@ var rsaSignatureSchemes = []struct {
 	{PKCS1WithSHA1, 15 + crypto.SHA1.Size() + 11, VersionTLS12},
 }
 
-// signatureSchemesForCertificate returns the list of supported SignatureSchemes
-// for a given certificate, based on the public key and the protocol version,
-// and optionally filtered by its explicit SupportedSignatureAlgorithms.
-//
-// This function must be kept in sync with supportedSignatureAlgorithms.
 func signatureSchemesForCertificate(version uint16, cert *Certificate) []SignatureScheme {
 	priv, ok := cert.PrivateKey.(crypto.Signer)
 	if !ok {
@@ -186,17 +177,6 @@ func signatureSchemesForCertificate(version uint16, cert *Certificate) []Signatu
 	var sigAlgs []SignatureScheme
 	switch pub := priv.Public().(type) {
 	case *ecdsa.PublicKey:
-		if version != VersionTLS13 {
-			// In TLS 1.2 and earlier, ECDSA algorithms are not
-			// constrained to a single curve.
-			sigAlgs = []SignatureScheme{
-				ECDSAWithP256AndSHA256,
-				ECDSAWithP384AndSHA384,
-				ECDSAWithP521AndSHA512,
-				ECDSAWithSHA1,
-			}
-			break
-		}
 		switch pub.Curve {
 		case elliptic.P256():
 			sigAlgs = []SignatureScheme{ECDSAWithP256AndSHA256}
@@ -233,9 +213,6 @@ func signatureSchemesForCertificate(version uint16, cert *Certificate) []Signatu
 	return sigAlgs
 }
 
-// selectSignatureScheme picks a SignatureScheme from the peer's preference list
-// that works with the selected certificate. It's only called for protocol
-// versions that support signature algorithms, so TLS 1.2 and 1.3.
 func selectSignatureScheme(vers uint16, c *Certificate, peerAlgs []SignatureScheme) (SignatureScheme, error) {
 	supportedAlgs := signatureSchemesForCertificate(vers, c)
 	if len(supportedAlgs) == 0 {
