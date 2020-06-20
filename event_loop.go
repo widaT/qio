@@ -7,7 +7,8 @@ import (
 	"github.com/widaT/poller/interest"
 	"github.com/widaT/poller/pollopt"
 	"github.com/widaT/qio/conn"
-	tls "github.com/widaT/qio/tls13"
+
+	//	tls "github.com/widaT/qio/tls13"
 	"golang.org/x/sys/unix"
 )
 
@@ -17,9 +18,9 @@ type EventLoop struct {
 	id          uint32
 	server      *Server
 	poller      *poller.Poller
-	connections map[int]conn.Conn
+	connections map[int]*conn.Conn
 	evServer    EventServer
-	tlsConfig   *tls.Config
+	//tlsConfig   *tls.Config
 }
 
 func (e *EventLoop) close() {
@@ -39,9 +40,9 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 		return err
 	}
 	conn := conn.NewConn(fd, sa)
-	if e.tlsConfig != nil {
+	/* 	if e.tlsConfig != nil {
 		conn = tls.Server(conn, e.tlsConfig)
-	}
+	} */
 	e.server.subEventLoop.connections[fd] = conn
 	e.evServer.OnContect(conn)
 	return nil
@@ -94,7 +95,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					conn.MoveWritePiont(n)
 					//info.conn.buf.Wrap(seg)
 				}
-				tConn, ok := conn.(*tls.Conn)
+				/* tConn, ok := conn.(*tls.Conn)
 				var err error
 				if ok {
 					if !tConn.ConnectionState().HandshakeComplete {
@@ -108,12 +109,12 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 							connectionClosed = true
 						}
 					}
-				} else {
-					err = e.evServer.OnMessage(conn)
-					if err != nil {
-						connectionClosed = true
-					}
+				} else { */
+				err := e.evServer.OnMessage(conn)
+				if err != nil {
+					connectionClosed = true
 				}
+				//	}
 				if connectionClosed {
 					log.Printf("conn %s connectionClosed err:%s", conn.RemoteAddr(), err)
 					delete(e.connections, int(ev.Fd))

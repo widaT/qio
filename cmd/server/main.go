@@ -13,7 +13,7 @@ type Server struct {
 	*qio.DefaultEvServer
 }
 
-func (s *Server) OnMessage(conn conn.Conn) error {
+func (s *Server) OnMessage(conn *conn.Conn) error {
 	b := make([]byte, 0x10000)
 	n, err := conn.Read(b)
 	if err != nil {
