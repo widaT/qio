@@ -75,7 +75,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 			case ev.IsReadable():
 				connectionClosed := false
 				for {
-					b := conn.NexWriteBlock()
+					b := conn.NexWritablePos()
 					n, err := unix.Read(int(ev.Fd), b)
 					if n == 0 {
 						connectionClosed = true

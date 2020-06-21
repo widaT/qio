@@ -11,7 +11,7 @@ func TestBuf(t *testing.T) {
 		if n >= len(c) {
 			break
 		}
-		b := l.NexWriteBlock()
+		b := l.NexWritablePos()
 		num := copy(b, c[n:])
 		l.MoveWritePiont(num)
 		n += num

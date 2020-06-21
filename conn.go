@@ -23,8 +23,8 @@ func NewConn(fd int, sa unix.Sockaddr) *Conn {
 	return c
 }
 
-func (c *Conn) NexWriteBlock() []byte {
-	return c.buf.NexWriteBlock()
+func (c *Conn) NexWritablePos() []byte {
+	return c.buf.NexWritablePos()
 }
 
 func (c *Conn) SetContext(context interface{}) {

@@ -108,7 +108,7 @@ func (buf *LinkedBuffer) growth() {
 	buf.wp.b = block
 }
 
-func (buf *LinkedBuffer) NexWriteBlock() []byte {
+func (buf *LinkedBuffer) NexWritablePos() []byte {
 	if buf.wp.pos == BLOCKSIZE {
 		buf.growth()
 	}
