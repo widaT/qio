@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/widaT/qio"
-	"github.com/widaT/qio/conn"
 	tls "github.com/widaT/tls13"
 )
 
@@ -16,20 +15,20 @@ type Server struct {
 var tlsConfig *tls.Config
 
 func init() {
-	c, err := tls.LoadX509KeyPair("tlsf/cert.pem", "tlsf/key.pem")
+	c, err := tls.LoadX509KeyPair("tls/cert.pem", "tls/key.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
 	tlsConfig = &tls.Config{Certificates: []tls.Certificate{c}}
 }
 
-func (s *Server) OnContect(conn *conn.Conn) error {
+func (s *Server) OnConnect(conn *qio.Conn) error {
 	tlsConn := tls.Server(conn, tlsConfig)
 	conn.SetContext(tlsConn)
 	return nil
 }
 
-func (s *Server) OnMessage(conn *conn.Conn) error {
+func (s *Server) OnMessage(conn *qio.Conn) error {
 	tlsConn := conn.GetContext().(*tls.Conn)
 	if !tlsConn.ConnectionState().HandshakeComplete {
 		return tlsConn.Handshake()

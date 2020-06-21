@@ -1,7 +1,6 @@
 package qio
 
 import (
-	"crypto/tls"
 	"net"
 	"runtime"
 	"sync"
@@ -10,19 +9,16 @@ import (
 	"github.com/widaT/poller"
 	"github.com/widaT/poller/interest"
 	"github.com/widaT/poller/pollopt"
-	"github.com/widaT/qio/conn"
 )
 
 var ServerToken = poller.NextToken()
 var ClientToken = poller.NextToken()
 
 type Server struct {
-	poller *poller.Poller
-	//ln   *listener
+	poller        *poller.Poller
 	evServer      EventServer
 	mainEventLoop *EventLoop
 	subEventLoop  *EventLoop
-	tlsConfig     *tls.Config
 }
 
 func NewServer(evServer EventServer) (*Server, error) {
@@ -43,22 +39,11 @@ func (s *Server) newEventLoop() (e *EventLoop, err error) {
 		return
 	}
 	e.id = atomic.AddUint32(&evId, 1) //so main eventloop id is 1,sub eventloop start 2
-	e.connections = make(map[int]*conn.Conn)
+	e.connections = make(map[int]*Conn)
 	e.server = s
-	//	e.tlsConfig = s.tlsConfig
 	e.evServer = s.evServer
 	return
 }
-
-/* func (s *Server) ServeTLS(network, addr, cert, key string) {
-	c, err := tls.LoadX509KeyPair(cert, key)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	s.tlsConfig = &tls.Config{Certificates: []tls.Certificate{c}}
-	s.Serve(network, addr)
-} */
 
 func (s *Server) Serve(network string, addr string) error {
 	ln, err := net.Listen("tcp", addr)

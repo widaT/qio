@@ -6,14 +6,13 @@ import (
 	"log"
 
 	"github.com/widaT/qio"
-	"github.com/widaT/qio/conn"
 )
 
 type Server struct {
 	*qio.DefaultEvServer
 }
 
-func (s *Server) OnMessage(conn *conn.Conn) error {
+func (s *Server) OnMessage(conn *qio.Conn) error {
 	b := make([]byte, 0x10000)
 	n, err := conn.Read(b)
 	if err != nil {
