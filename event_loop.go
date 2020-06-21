@@ -7,7 +7,6 @@ import (
 	"github.com/widaT/poller/interest"
 	"github.com/widaT/poller/pollopt"
 
-	//	tls "github.com/widaT/qio/tls13"
 	"golang.org/x/sys/unix"
 )
 
