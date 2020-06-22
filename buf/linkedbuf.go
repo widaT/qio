@@ -171,10 +171,6 @@ func (buf *LinkedBuffer) Shift(n int) {
 	}
 }
 
-func (buf *LinkedBuffer) Len() int {
-	return buf.Buffered()
-}
-
 func (buf *LinkedBuffer) Read(b []byte) (n int, err error) {
 	n = len(b)
 	if n == 0 {
@@ -232,11 +228,6 @@ func (buf *LinkedBuffer) Buffered() int {
 	}
 	return (BLOCKSIZE - rp.pos + wp.pos) + (n-1)*BLOCKSIZE
 }
-
-/* func (buf *LinkedBuffer) Buffered() int {
-
-	for p:= buf.wp;
-} */
 
 func (buf *LinkedBuffer) BlockLen() int {
 	return buf.l.Len()

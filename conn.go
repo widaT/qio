@@ -39,10 +39,6 @@ func (c *Conn) Bytes() []byte {
 	return c.buf.Bytes()
 }
 
-func (c *Conn) Len() int {
-	return c.buf.Len()
-}
-
 func (c *Conn) Shift(n int) {
 	c.buf.Shift(n)
 }
