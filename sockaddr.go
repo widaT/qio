@@ -2,7 +2,6 @@ package qio
 
 import (
 	"net"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -17,11 +16,11 @@ func Sockaddr2TCP(sa unix.Sockaddr) net.Addr {
 	return nil
 }
 
-func Sockaddr2UDP(sa syscall.Sockaddr) net.Addr {
+func Sockaddr2UDP(sa unix.Sockaddr) net.Addr {
 	switch sa := sa.(type) {
-	case *syscall.SockaddrInet4:
+	case *unix.SockaddrInet4:
 		return &net.UDPAddr{IP: sa.Addr[0:], Port: sa.Port}
-	case *syscall.SockaddrInet6:
+	case *unix.SockaddrInet6:
 		return &net.UDPAddr{IP: sa.Addr[0:], Port: sa.Port, Zone: uitoa(uint(sa.ZoneId))}
 	}
 	return nil
