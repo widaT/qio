@@ -31,10 +31,20 @@ func (s *Server) OnConnect(conn *qio.Conn) error {
 func (s *Server) OnMessage(conn *qio.Conn) error {
 	tlsConn := conn.GetContext().(*tls.Conn)
 	if !tlsConn.ConnectionState().HandshakeComplete {
-		return tlsConn.Handshake()
+		err := tlsConn.Handshake()
+		if err != nil {
+			if tls.StatusPartial == err {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
 	b := make([]byte, 1024)
 	n, err := tlsConn.Read(b)
+	if tls.StatusPartial == err {
+		return nil
+	}
 	fmt.Printf("receive %s \n", b[:n])
 	if err != nil {
 		return err
