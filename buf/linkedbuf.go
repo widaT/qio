@@ -2,7 +2,6 @@ package buf
 
 import (
 	"container/list"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -34,22 +33,6 @@ func (b *Block) reset(blockIndex int) {
 	b.refCount = 0
 	b.blockIndex = blockIndex
 	b.next = nil
-}
-
-type Segment struct {
-	block  *Block
-	b      []byte
-	droped bool
-}
-
-func (d *Segment) Byte() []byte {
-	return d.b
-}
-func (d *Segment) Drop() {
-	if d.droped {
-		return
-	}
-	refCount(d.block, RefCountMinus)
 }
 
 func NewBlock(blockIndex int) *Block {
@@ -115,13 +98,9 @@ func (buf *LinkedBuffer) NexWritablePos() []byte {
 	return buf.wp.b.data[buf.wp.pos:]
 }
 
-func (buf *LinkedBuffer) MoveWritePiont(n int) (s *Segment) {
-	s = new(Segment)
-	s.block = buf.wp.b
-	s.b = buf.wp.b.data[buf.wp.pos : buf.wp.pos+n]
+func (buf *LinkedBuffer) MoveWritePiont(n int) {
 	buf.wp.pos += n
 	buf.wp.b.refCount++
-	return s
 }
 
 func (buf *LinkedBuffer) Bytes() []byte {
@@ -248,12 +227,6 @@ func (buf *LinkedBuffer) Gc() {
 		if block == buf.rp.b {
 			break
 		}
-		/* 		if atomic.LoadInt32(&block.refCount) == 0 {
-		   			buf.l.Remove(item)
-		   			blockPool.Put(block)
-		   		} else {
-		   			break
-		   		} */
 		buf.l.Remove(item)
 		blockPool.Put(block)
 	}
@@ -264,112 +237,5 @@ func refCount(b *Block, op int) {
 		atomic.AddInt32(&b.refCount, 1)
 	} else {
 		atomic.AddInt32(&b.refCount, -1)
-	}
-}
-
-type ConpositeBuf struct {
-	segments []*Segment
-	length   int
-	read     int
-}
-
-func (c *ConpositeBuf) Wrap(s *Segment) {
-	c.segments = append(c.segments, s)
-	c.length += len(s.b)
-}
-
-func (c *ConpositeBuf) Buffered() int {
-	return c.length - c.read
-}
-
-func (c *ConpositeBuf) Read(b []byte) (n int, err error) {
-	if c.length == 0 {
-		return 0, errors.New("no data")
-	}
-	if c.read > c.length {
-		return 0, io.EOF
-	}
-	count := len(b)
-	if count == 0 {
-		return 0, nil
-	}
-
-	//found read postion
-	var j = 0
-	var pos = 0
-	var sIndex = 0
-	for i, s := range c.segments {
-		if j+len(s.b) > c.read {
-			sIndex = i
-			pos = c.read - j
-			break
-		} else {
-			j += len(s.b)
-		}
-	}
-
-	//copy data
-	for ; sIndex < len(c.segments); sIndex++ {
-		block := c.segments[sIndex].b[pos:]
-		if n >= count-1 {
-			break
-		}
-		num := copy(b[n:], block)
-		c.read += num
-		n += num
-		pos = 0
-	}
-	return
-}
-
-func (c *ConpositeBuf) ReadN(n int) ([]byte, error) {
-	if n <= 0 {
-		return nil, errors.New("Parameter error")
-	}
-	if c.length < n {
-		return nil, errors.New("not enough data")
-	}
-
-	if n <= len(c.segments[0].b) {
-		c.read += n
-		return c.segments[0].b[:n], nil
-	}
-	bigB := make([]byte, n)
-	c.Read(bigB)
-
-	return bigB, nil
-}
-
-//Peek return bytes but not move the read point
-func (c *ConpositeBuf) Peek(n int) (b []byte, err error) {
-	if n > c.Buffered() {
-		return nil, errors.New("not enough data")
-	}
-	b, err = c.ReadN(n)
-	if err != nil {
-		return
-	}
-	c.read -= len(b)
-	return
-}
-
-func (c *ConpositeBuf) Discurd(n int) error {
-	if n < 0 {
-		return errors.New("Parameter error")
-	}
-
-	if n > c.length {
-		return errors.New("not enough data")
-	}
-
-	if c.read+n <= c.length {
-		c.read += n
-	}
-	return nil
-}
-
-func (c *ConpositeBuf) Drop() {
-	for _, s := range c.segments {
-		s.Drop()
 	}
 }
