@@ -70,6 +70,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 		}
 	case ClientToken:
 		if conn, found := e.connections[int(ev.Fd)]; found {
+			var err error
 			switch {
 			case ev.IsReadable():
 				connectionClosed := false
@@ -96,9 +97,11 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					}
 					conn.MoveWritePiont(n)
 				}
-				err := e.evServer.OnMessage(conn)
-				if err != nil {
-					connectionClosed = true
+				if !connectionClosed {
+					err = e.evServer.OnMessage(conn)
+					if err != nil {
+						connectionClosed = true
+					}
 				}
 				if connectionClosed {
 					log.Printf("conn %s connectionClosed err:%s", conn.RemoteAddr(), err)
