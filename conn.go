@@ -40,6 +40,10 @@ func (c *Conn) Bytes() (b []byte) {
 	return
 }
 
+func (c *Conn) Buffered() int {
+	return c.buf.Buffered()
+}
+
 func (c *Conn) ReadN(n int) ([]byte, int) {
 	return c.buf.ReadN(n)
 }
