@@ -3,7 +3,7 @@ package qio
 import (
 	"net"
 
-	"github.com/widaT/qio/buf"
+	buf "github.com/widaT/linkedbuf"
 	"golang.org/x/sys/unix"
 )
 
@@ -35,8 +35,13 @@ func (c *Conn) GetContext() interface{} {
 	return c.context
 }
 
-func (c *Conn) Bytes() []byte {
-	return c.buf.Bytes()
+func (c *Conn) Bytes() (b []byte) {
+	b, _ = c.buf.Bytes()
+	return
+}
+
+func (c *Conn) ReadN(n int) ([]byte, int) {
+	return c.buf.ReadN(n)
 }
 
 func (c *Conn) Shift(n int) {
