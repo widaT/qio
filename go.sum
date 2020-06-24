@@ -8,6 +8,10 @@ github.com/widaT/http1 v0.0.0-20200623114559-de092b2f1000 h1:ZUrulBlJomjwkewj+GR
 github.com/widaT/http1 v0.0.0-20200623114559-de092b2f1000/go.mod h1:7ehQgZgi2UZ0xDAS4ghpoy+oV5s3uAKh36rJGvvjYTI=
 github.com/widaT/httparse v0.0.0-20200527071707-8980a9cd2beb h1:tcN9sc1bVPaqoB1NxDTKG+FJcBfuwbjlwLiT/CW+pxM=
 github.com/widaT/httparse v0.0.0-20200527071707-8980a9cd2beb/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
+github.com/widaT/httparse v0.0.0-20200624095608-508fe15aff31 h1:gydVRJkpeE/mjBH1iTJJhsG4W4mwRhj9CVE14pFPRig=
+github.com/widaT/httparse v0.0.0-20200624095608-508fe15aff31/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
+github.com/widaT/httparse v0.0.0-20200624135641-fded79c606d4 h1:/LmLityYm3YCnzphXhEytfThV9+4vpjpnudSVLeixgk=
+github.com/widaT/httparse v0.0.0-20200624135641-fded79c606d4/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
 github.com/widaT/linkedbuf v0.0.0-20200624031127-eac379171d09 h1:IEkno87eiF7oN1vcbApMi280XNtolijJ01pFn/vmrr8=
 github.com/widaT/linkedbuf v0.0.0-20200624031127-eac379171d09/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
 github.com/widaT/linkedbuf v0.0.0-20200624042509-4deaa1a3ea68 h1:GH8rOHcnla08NC563nr+5vW3xW0U6TADRNARJvkHvZE=

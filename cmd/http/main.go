@@ -14,15 +14,15 @@ type Server struct {
 
 func (s *Server) OnMessage(conn *qio.Conn) error {
 	req := new(http.Request)
-	b := conn.Bytes()
-	n, err := req.Parse(b)
+
+	err := req.Parse(conn)
 	if err != nil {
 		log.Printf("%v", err)
 		return err
 	}
-	conn.Shift(n)
 	//fmt.Println(req)
 
+	fmt.Println(*req.Header())
 	fmt.Println(req.Body())
 
 	return nil
