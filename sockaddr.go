@@ -9,7 +9,7 @@ import (
 func Sockaddr2TCP(sa unix.Sockaddr) net.Addr {
 	switch sa := sa.(type) {
 	case *unix.SockaddrInet4:
-		return &net.TCPAddr{IP: sa.Addr[0:], Port: sa.Port}
+		return &net.TCPAddr{IP: sa.Addr[0:], Port: sa.Port, Zone: ""}
 	case *unix.SockaddrInet6:
 		return &net.TCPAddr{IP: sa.Addr[0:], Port: sa.Port, Zone: uitoa(uint(sa.ZoneId))}
 	}

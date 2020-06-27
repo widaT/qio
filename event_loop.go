@@ -37,7 +37,9 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 		return err
 	}
 	conn := NewConn(fd, sa)
-	e.server.subEventLoop.connections[fd] = conn
+	e.server.subEventLoop.runTask(func() {
+		e.server.subEventLoop.connections[fd] = conn
+	})
 	e.evServer.OnConnect(conn)
 	return nil
 }
@@ -53,21 +55,18 @@ func (e *EventLoop) runTask(fn func()) {
 func (e *EventLoop) handleEvent(ev *poller.Event) error {
 	switch ev.Token() {
 	case ServerToken:
-		for {
-			cfd, sa, err := unix.Accept(int(ev.Fd))
-			if err != nil {
-				//WouldBlock
-				if err == unix.EAGAIN {
-					//	fmt.Println(err)
-					break
-				}
-				return err
+		cfd, sa, err := unix.Accept(int(ev.Fd))
+		if err != nil {
+			//WouldBlock
+			if err == unix.EAGAIN {
+				return nil
 			}
-			if err := poller.Nonblock(cfd); err != nil {
-				return err
-			}
-			e.accept(cfd, sa)
+			return err
 		}
+		if err := poller.Nonblock(cfd); err != nil {
+			return err
+		}
+		return e.accept(cfd, sa)
 	case ClientToken:
 		if conn, found := e.connections[int(ev.Fd)]; found {
 			var err error
@@ -77,6 +76,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 				for {
 					b := conn.NexWritablePos()
 					n, err := unix.Read(int(ev.Fd), b)
+					//fmt.Println("read ", n)
 					if n == 0 {
 						connectionClosed = true
 						break
@@ -104,8 +104,9 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					}
 				}
 				if connectionClosed {
-					log.Printf("conn %s connectionClosed err:%s", conn.RemoteAddr(), err)
+					log.Printf("conn %s connectionClosed err:%v", conn.RemoteAddr(), err)
 					delete(e.connections, int(ev.Fd))
+					e.poller.Deregister(int(ev.Fd))
 					e.evServer.OnClose(conn)
 					conn.Close()
 				}

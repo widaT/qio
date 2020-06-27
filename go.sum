@@ -12,6 +12,8 @@ github.com/widaT/httparse v0.0.0-20200624095608-508fe15aff31 h1:gydVRJkpeE/mjBH1
 github.com/widaT/httparse v0.0.0-20200624095608-508fe15aff31/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
 github.com/widaT/httparse v0.0.0-20200624135641-fded79c606d4 h1:/LmLityYm3YCnzphXhEytfThV9+4vpjpnudSVLeixgk=
 github.com/widaT/httparse v0.0.0-20200624135641-fded79c606d4/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
+github.com/widaT/httparse v0.0.0-20200626234402-5f7b7cd6e37c h1:XZAk/INlr7i4A49wx1eJQmSwulvpcT+wgrBctlpMCV8=
+github.com/widaT/httparse v0.0.0-20200626234402-5f7b7cd6e37c/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
 github.com/widaT/linkedbuf v0.0.0-20200624031127-eac379171d09 h1:IEkno87eiF7oN1vcbApMi280XNtolijJ01pFn/vmrr8=
 github.com/widaT/linkedbuf v0.0.0-20200624031127-eac379171d09/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
 github.com/widaT/linkedbuf v0.0.0-20200624042509-4deaa1a3ea68 h1:GH8rOHcnla08NC563nr+5vW3xW0U6TADRNARJvkHvZE=
@@ -20,6 +22,8 @@ github.com/widaT/linkedbuf v0.0.0-20200624063829-926f6f530857 h1:uFFHJrtEnMfnZUq
 github.com/widaT/linkedbuf v0.0.0-20200624063829-926f6f530857/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
 github.com/widaT/linkedbuf v0.0.0-20200624064804-50a5736183d3 h1:GYBkpLEk8dPxsi63vQn4z5qDHdqQt7Mwyw6G49SrVu4=
 github.com/widaT/linkedbuf v0.0.0-20200624064804-50a5736183d3/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
+github.com/widaT/linkedbuf v0.0.0-20200627005813-e9045bdb9996 h1:fyG/Uv5HR26cyAdbRu42b3mUVWR0pYLOv7BviXncRvg=
+github.com/widaT/linkedbuf v0.0.0-20200627005813-e9045bdb9996/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
 github.com/widaT/poller v0.0.0-20200618102045-955b90a020f2 h1:SE77BEMTh5eRfxC3nEoB7izFf9WrLi6Ao1o11UszeBY=
 github.com/widaT/poller v0.0.0-20200618102045-955b90a020f2/go.mod h1:aCqdJ1yq6G1LB1aSmIhCcGTchh0UshJHnFirKgquL3g=
 github.com/widaT/tls13 v0.0.0-20200621014543-54c41dfea8ed h1:AXcLMicZ7enN4xzqHA11qSBQqHzit/jVRbuwWWDokTg=
@@ -46,4 +50,6 @@ golang.org/x/sys v0.0.0-20200620081246-981b61492c35 h1:wb/9mP8eUAmHfkM8RmpeLq6nU
 golang.org/x/sys v0.0.0-20200620081246-981b61492c35/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4 h1:5/PjkGUjvEU5Gl6BxmvKRPpqo2uNMv4rcHBMwzk/st8=
 golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae h1:Ih9Yo4hSPImZOpfGuA4bR/ORKTAbhZo2AbWNRCnevdo=
+golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

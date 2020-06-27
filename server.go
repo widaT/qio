@@ -2,6 +2,7 @@ package qio
 
 import (
 	"net"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -9,6 +10,7 @@ import (
 	"github.com/widaT/poller"
 	"github.com/widaT/poller/interest"
 	"github.com/widaT/poller/pollopt"
+	"golang.org/x/sys/unix"
 )
 
 var ServerToken = poller.NextToken()
@@ -19,6 +21,9 @@ type Server struct {
 	evServer      EventServer
 	mainEventLoop *EventLoop
 	subEventLoop  *EventLoop
+	ln            net.Listener
+	fd            int
+	file          *os.File //file 可以避免 accept 时 Bad file descriptor
 }
 
 func NewServer(evServer EventServer) (*Server, error) {
@@ -45,12 +50,30 @@ func (s *Server) newEventLoop() (e *EventLoop, err error) {
 	return
 }
 
+func (s *Server) Listener2Fd(ln net.Listener, nonblock bool) (err error) {
+	switch l := ln.(type) {
+	case *net.TCPListener:
+		s.file, err = l.File()
+	case *net.UnixListener:
+		s.file, err = l.File()
+	}
+	if err != nil {
+		return
+	}
+	s.fd = int(s.file.Fd())
+	if nonblock {
+		err = unix.SetNonblock(s.fd, true)
+	}
+	return
+}
+
 func (s *Server) Serve(network string, addr string) error {
-	ln, err := net.Listen("tcp", addr)
+	var err error
+	s.ln, err = net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
-	fd, err := poller.Listener2Fd(ln, true)
+	err = s.Listener2Fd(s.ln, true)
 	if err != nil {
 		return err
 	}
@@ -59,7 +82,7 @@ func (s *Server) Serve(network string, addr string) error {
 		return err
 	}
 
-	err = s.mainEventLoop.poller.Register(fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
+	err = s.mainEventLoop.poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
 	if err != nil {
 		return err
 	}
