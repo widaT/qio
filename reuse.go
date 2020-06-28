@@ -9,12 +9,8 @@ import (
 	"github.com/libp2p/go-reuseport"
 )
 
-/* func ReuseListenPacket(proto, addr string) (net.PacketConn, error) {
-	return reuseport.ListenPacket(proto, addr)
-} */
-
-func ReuseListen(proto, addr string) (net.Listener, error) {
-	return reuseport.Listen(proto, addr)
+func ReuseListen(network, addr string) (net.Listener, error) {
+	return reuseport.Listen(network, addr)
 }
 
 func reuseSuported() bool {

@@ -71,7 +71,7 @@ func (s *Server) Listener2Fd(ln net.Listener, nonblock bool) (err error) {
 
 func (s *Server) Serve(network string, addr string) error {
 	var err error
-	s.ln, err = net.Listen("tcp", addr)
+	s.ln, err = net.Listen(network, addr)
 	if err != nil {
 		return err
 	}
