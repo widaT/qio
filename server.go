@@ -17,6 +17,7 @@ var ServerToken = poller.NextToken()
 var ClientToken = poller.NextToken()
 
 type Server struct {
+	portReuse     bool
 	poller        *poller.Poller
 	evServer      EventServer
 	mainEventLoop *EventLoop
@@ -33,6 +34,7 @@ func NewServer(evServer EventServer) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	server.portReuse = reuseSuported()
 	server.evServer = evServer
 	return server, nil
 }
@@ -77,16 +79,44 @@ func (s *Server) Serve(network string, addr string) error {
 	if err != nil {
 		return err
 	}
+	if s.portReuse {
+		return s.runLoopsMode()
+	}
+	return s.runMainSubMode()
+}
+
+func (s *Server) runLoopsMode() (err error) {
+	n := runtime.NumCPU()
+	eventLoops := make([]*EventLoop, n)
+	for i := 0; i < n; i++ {
+		eventLoops[i], err = s.newEventLoop()
+		if err != nil {
+			return err
+		}
+		eventLoops[i].poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
+	}
+	wg := sync.WaitGroup{}
+	for _, e := range eventLoops {
+		wg.Add(1)
+		go func(e *EventLoop) {
+			runtime.LockOSThread()
+			e.run()
+			wg.Done()
+		}(e)
+	}
+	wg.Wait()
+	return nil
+}
+
+func (s *Server) runMainSubMode() (err error) {
 	s.mainEventLoop, err = s.newEventLoop()
 	if err != nil {
 		return err
 	}
-
 	err = s.mainEventLoop.poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
 	if err != nil {
 		return err
 	}
-
 	s.subEventLoop, err = s.newEventLoop()
 	if err != nil {
 		return err
@@ -95,7 +125,6 @@ func (s *Server) Serve(network string, addr string) error {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
-		//runtime.LockOSThread()
 		s.mainEventLoop.run()
 		wg.Done()
 	}()
@@ -106,5 +135,5 @@ func (s *Server) Serve(network string, addr string) error {
 		wg.Done()
 	}()
 	wg.Wait()
-	return nil
+	return
 }

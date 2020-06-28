@@ -32,13 +32,17 @@ func (e *EventLoop) run() {
 }
 
 func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
-	err := e.server.subEventLoop.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
+	ev := e.server.subEventLoop
+	if e.server.portReuse {
+		ev = e
+	}
+	err := ev.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
 	if err != nil {
 		return err
 	}
 	conn := NewConn(fd, sa)
-	e.server.subEventLoop.runTask(func() {
-		e.server.subEventLoop.connections[fd] = conn
+	ev.runTask(func() {
+		ev.connections[fd] = conn
 	})
 	e.evServer.OnConnect(conn)
 	return nil
