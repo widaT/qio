@@ -56,5 +56,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server.Serve("tcp", "127.0.0.1:9999")
+	server.Serve("tcp6", ":9999")
 }
