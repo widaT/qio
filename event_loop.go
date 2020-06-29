@@ -1,6 +1,7 @@
 package qio
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/widaT/poller"
@@ -56,6 +57,16 @@ func (e *EventLoop) runTask(fn func()) {
 	}
 }
 
+func (e *EventLoop) CloseConn(conn *Conn) {
+	delete(e.connections, int(conn.fd))
+	e.poller.Deregister(int(conn.fd))
+	e.evServer.OnClose(conn)
+	fmt.Println(conn.remoteAddr.String(), "close")
+	unix.Close(conn.fd)
+	conn.buf.Release()
+	conn.outbuf.Release()
+}
+
 func (e *EventLoop) handleEvent(ev *poller.Event) error {
 	switch ev.Token() {
 	case ServerToken:
@@ -95,7 +106,6 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 							continue
 						}
 						//防止 connection reset by peer 的情况下程序退出
-						log.Println(err)
 						connectionClosed = true
 						break
 					}
@@ -108,11 +118,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					}
 				}
 				if connectionClosed {
-					log.Printf("conn %s connectionClosed err:%v", conn.RemoteAddr(), err)
-					delete(e.connections, int(ev.Fd))
-					e.poller.Deregister(int(ev.Fd))
-					e.evServer.OnClose(conn)
-					conn.Close()
+					e.CloseConn(conn)
 				}
 			case ev.IsWritable():
 				if conn.outbuf.Buffered() == 0 {

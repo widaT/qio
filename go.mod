@@ -12,3 +12,4 @@ require (
 )
 
 replace github.com/widaT/http1 v0.0.0-20200627122705-5d250421bc5e => /home/wida/gocode/net/http1
+replace github.com/widaT/tls13 v0.0.0-20200624074259-be05d3a87a28 => /home/wida/gocode/net/tls13

@@ -93,8 +93,10 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 }
 
 func (c *Conn) Close() error {
-	c.buf.Release()
-	return unix.Close(c.fd)
+	c.e.runTask(func() {
+		c.e.CloseConn(c)
+	})
+	return nil
 }
 
 func (c *Conn) LocalAddr() net.Addr {

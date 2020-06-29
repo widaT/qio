@@ -34,10 +34,11 @@ func (s *Server) OnMessage(conn *qio.Conn) error {
 	if tls.StatusPartial == err {
 		return nil
 	}
-	fmt.Printf("receive %s \n", b)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
+	fmt.Printf("receive %s \n", b)
 	tlsConn.Write(b)
 	tlsConn.Shift(n)
 	return nil

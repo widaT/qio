@@ -15,23 +15,32 @@ type Server struct {
 	*qio.DefaultEvServer
 }
 
+func (s *Server) OnConnect(conn *qio.Conn) error {
+	//fmt.Println(c.RemoteAddr().String())
+
+	ctx := http.AcquireContext(httpServer, conn)
+	conn.SetContext(ctx)
+	return nil
+}
+
 func (s *Server) OnMessage(conn *qio.Conn) error {
-	var ctx *http.Context
-	if conn.GetContext() == nil {
-		ctx = http.AcquireContext(httpServer, conn)
-		conn.SetContext(ctx)
-	} else {
-		ctx = conn.GetContext().(*http.Context)
+	ctx, ok := conn.GetContext().(*http.Context)
+	if !ok {
+		log.Fatal("something wrong")
 	}
 	if err := ctx.ServeHttp(); err != nil {
-		fmt.Println(err)
-		if err != http.StatusPartial {
-			conn.Close()
-			return err
-		}
+		conn.Close()
+		return err
 	}
-	ctx.Reset(conn)
 	return nil
+}
+
+func (s *Server) OnClose(conn *qio.Conn) {
+	if conn.GetContext() != nil {
+		ctx := conn.GetContext().(*http.Context)
+		http.ReleaseContext(ctx)
+		fmt.Println(conn.RemoteAddr(), "close")
+	}
 }
 
 func handler(ctx *http.Context) {
@@ -56,5 +65,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server.Serve("tcp6", ":9999")
+	server.Serve("tcp", ":9999")
 }
