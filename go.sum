@@ -14,6 +14,8 @@ github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
+github.com/widaT/http1 v0.0.0-20200629103137-4c43d5abbcda h1:YlW2ka99uWnH4w9dGA0azdqJkyZ8GPE2TTRsTzHwxbE=
+github.com/widaT/http1 v0.0.0-20200629103137-4c43d5abbcda/go.mod h1:enJ4d6Cj5xru+/5GNp1pesNWFAqW8IkfGrTFPCD9kyE=
 github.com/widaT/httparse v0.0.0-20200626234402-5f7b7cd6e37c h1:XZAk/INlr7i4A49wx1eJQmSwulvpcT+wgrBctlpMCV8=
 github.com/widaT/httparse v0.0.0-20200626234402-5f7b7cd6e37c/go.mod h1:GotUHPfGSzw9pFMkfMd80dOOETmnn99t1LaqNJIVlps=
 github.com/widaT/linkedbuf v0.0.0-20200624064804-50a5736183d3 h1:GYBkpLEk8dPxsi63vQn4z5qDHdqQt7Mwyw6G49SrVu4=
@@ -22,8 +24,8 @@ github.com/widaT/linkedbuf v0.0.0-20200627005813-e9045bdb9996 h1:fyG/Uv5HR26cyAd
 github.com/widaT/linkedbuf v0.0.0-20200627005813-e9045bdb9996/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
 github.com/widaT/poller v0.0.0-20200629024424-f8833c2f0dfb h1:qwvTY7MnnD+Erh8UfUAueU+9mjP7kB+kI4De9Gsh1r8=
 github.com/widaT/poller v0.0.0-20200629024424-f8833c2f0dfb/go.mod h1:aCqdJ1yq6G1LB1aSmIhCcGTchh0UshJHnFirKgquL3g=
-github.com/widaT/tls13 v0.0.0-20200624074259-be05d3a87a28 h1:2YlM+Np9Of9UmJW/jUr30+bwVnt0LJ4f3lyJ3F+Xnw8=
-github.com/widaT/tls13 v0.0.0-20200624074259-be05d3a87a28/go.mod h1:rY5e8vJpuhGgSaWLC+q9ZqDxeepbqjWdrkodydotdZk=
+github.com/widaT/tls13 v0.0.0-20200629104434-edf33426daa7 h1:JJqsftZ/EdiEMON8WOEF1CURb5KDbCY3u/CJAYRBHf0=
+github.com/widaT/tls13 v0.0.0-20200629104434-edf33426daa7/go.mod h1:rY5e8vJpuhGgSaWLC+q9ZqDxeepbqjWdrkodydotdZk=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 h1:psW17arqaxU48Z5kZ0CQnkZWQJsqcURM6tKiBApRjXI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
