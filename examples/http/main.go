@@ -17,7 +17,6 @@ type Server struct {
 
 func (s *Server) OnConnect(conn *qio.Conn) error {
 	//fmt.Println(c.RemoteAddr().String())
-
 	ctx := http.AcquireContext(httpServer, conn)
 	conn.SetContext(ctx)
 	return nil

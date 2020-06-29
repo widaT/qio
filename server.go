@@ -21,7 +21,7 @@ type Server struct {
 	poller        *poller.Poller
 	evServer      EventServer
 	mainEventLoop *EventLoop
-	subEventLoop  *EventLoop
+	subEventLoop  []*EventLoop
 	ln            net.Listener
 	fd            int
 	file          *os.File //file 可以避免 accept 时 Bad file descriptor
@@ -117,23 +117,26 @@ func (s *Server) runMainSubMode() (err error) {
 	if err != nil {
 		return err
 	}
-	s.subEventLoop, err = s.newEventLoop()
-	if err != nil {
-		return err
-	}
-
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	n := runtime.NumCPU()
+	s.subEventLoop = make([]*EventLoop, n)
+	for i := 0; i < n; i++ {
+		s.subEventLoop[i], err = s.newEventLoop()
+		if err != nil {
+			return err
+		}
+		wg.Add(1)
+		go func(i int) {
+			runtime.LockOSThread()
+			s.subEventLoop[i].run()
+			wg.Done()
+		}(i)
+	}
 	go func() {
 		s.mainEventLoop.run()
 		wg.Done()
 	}()
 
-	go func() {
-		runtime.LockOSThread()
-		s.subEventLoop.run()
-		wg.Done()
-	}()
 	wg.Wait()
 	return
 }

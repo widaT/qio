@@ -12,6 +12,7 @@ import (
 )
 
 var evId uint32
+var nextIdx int
 
 type EventLoop struct {
 	id          uint32
@@ -33,9 +34,15 @@ func (e *EventLoop) run() {
 }
 
 func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
-	ev := e.server.subEventLoop
+	var ev *EventLoop
 	if e.server.portReuse {
 		ev = e
+	} else {
+		if nextIdx == len(e.server.subEventLoop) {
+			nextIdx = 0
+		}
+		ev = e.server.subEventLoop[nextIdx]
+		nextIdx++
 	}
 	err := ev.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
 	if err != nil {

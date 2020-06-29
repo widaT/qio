@@ -15,7 +15,7 @@ type Server struct {
 var tlsConfig *tls.Config
 
 func init() {
-	c, err := tls.LoadX509KeyPair("tls/cert.pem", "tls/key.pem")
+	c, err := tls.LoadX509KeyPair("examples/tls/pem/cert.pem", "examples/tls/pem/key.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
