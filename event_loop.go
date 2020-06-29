@@ -40,7 +40,7 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	if err != nil {
 		return err
 	}
-	conn := NewConn(fd, sa)
+	conn := NewConn(ev, fd, sa)
 	ev.runTask(func() {
 		ev.connections[fd] = conn
 	})
@@ -113,6 +113,23 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					e.poller.Deregister(int(ev.Fd))
 					e.evServer.OnClose(conn)
 					conn.Close()
+				}
+			case ev.IsWritable():
+				if conn.outbuf.Buffered() == 0 {
+					e.poller.Reregister(int(ev.Fd), ClientToken, interest.READABLE, pollopt.Level)
+					return nil
+				}
+				b, n := conn.outbuf.Bytes()
+				n, err := unix.Write(int(ev.Fd), b)
+				if err != nil {
+					if err == unix.EAGAIN {
+						return nil
+					}
+					return err
+				}
+				conn.outbuf.Shift(n)
+				if conn.outbuf.Buffered() == 0 {
+					e.poller.Reregister(int(ev.Fd), ClientToken, interest.READABLE, pollopt.Level)
 				}
 			}
 		}

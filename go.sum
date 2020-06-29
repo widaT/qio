@@ -35,6 +35,8 @@ github.com/widaT/linkedbuf v0.0.0-20200627005813-e9045bdb9996 h1:fyG/Uv5HR26cyAd
 github.com/widaT/linkedbuf v0.0.0-20200627005813-e9045bdb9996/go.mod h1:cnRYqTcnIiY0d0BNB2L0EcTrWCUfYlWkOJGBlY5eXUM=
 github.com/widaT/poller v0.0.0-20200618102045-955b90a020f2 h1:SE77BEMTh5eRfxC3nEoB7izFf9WrLi6Ao1o11UszeBY=
 github.com/widaT/poller v0.0.0-20200618102045-955b90a020f2/go.mod h1:aCqdJ1yq6G1LB1aSmIhCcGTchh0UshJHnFirKgquL3g=
+github.com/widaT/poller v0.0.0-20200629024424-f8833c2f0dfb h1:qwvTY7MnnD+Erh8UfUAueU+9mjP7kB+kI4De9Gsh1r8=
+github.com/widaT/poller v0.0.0-20200629024424-f8833c2f0dfb/go.mod h1:aCqdJ1yq6G1LB1aSmIhCcGTchh0UshJHnFirKgquL3g=
 github.com/widaT/tls13 v0.0.0-20200621014543-54c41dfea8ed h1:AXcLMicZ7enN4xzqHA11qSBQqHzit/jVRbuwWWDokTg=
 github.com/widaT/tls13 v0.0.0-20200621014543-54c41dfea8ed/go.mod h1:HLsnCTK+/GfnSTqRJI2RpZCP0veKLcKSN+5M+6qB4dY=
 github.com/widaT/tls13 v0.0.0-20200622022524-88ae71092cc0 h1:o11uBGaLPr+lTdwguOwkqU/qxc20j8LahctbAhxfHZc=
