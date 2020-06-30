@@ -46,6 +46,14 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	}
 
 	conn := NewConn(ev, fd, sa)
+	if e.server.keepAlive {
+		if err := setKeepAlive(fd); err != nil {
+			return err
+		}
+		if err := setKeepAlivePeriod(fd, e.server.keepAlivePeriod); err != nil {
+			return err
+		}
+	}
 	ev.runTask(func() {
 		ev.connections[fd] = conn
 		err := ev.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
@@ -81,7 +89,9 @@ func (e *EventLoop) CloseConn(conn *Conn) {
 		log.Printf("%v", err)
 	}
 	conn.buf.Release()
-	conn.outbuf.Release()
+	if conn.outbuf != nil {
+		conn.outbuf.Release()
+	}
 }
 
 func (e *EventLoop) handleEvent(ev *poller.Event) error {
@@ -146,7 +156,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 					e.CloseConn(conn)
 				}
 			case ev.IsWritable():
-				if conn.outbuf.Buffered() == 0 {
+				if conn.outbuf == nil || conn.outbuf.Buffered() == 0 {
 					e.poller.Reregister(fd, ClientToken, interest.READABLE, pollopt.Level)
 					return nil
 				}
@@ -168,12 +178,15 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 	return nil
 }
 
-func SetKeepAlive(fd, secs int) error {
-	if err := unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_KEEPALIVE, 1); err != nil {
+func setKeepAlive(fd int) error {
+	return unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_KEEPALIVE, 1)
+}
+
+func setKeepAlivePeriod(fd, secs int) (err error) {
+	err = unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_KEEPINTVL, secs)
+	if err != nil {
 		return err
 	}
-	if err := unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_KEEPINTVL, secs); err != nil {
-		return err
-	}
-	return unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_KEEPIDLE, secs)
+	err = unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_KEEPIDLE, secs)
+	return
 }

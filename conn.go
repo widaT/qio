@@ -23,7 +23,8 @@ func NewConn(ev *EventLoop, fd int, sa unix.Sockaddr) *Conn {
 	c := new(Conn)
 	c.e = ev
 	c.buf = buf.New()
-	c.outbuf = buf.New()
+	//outbuf use lazy initialize
+	//c.outbuf = buf.New()
 	c.fd = fd
 	c.remoteAddr = Sockaddr2TCP(sa)
 	return c
@@ -72,6 +73,10 @@ func (c *Conn) Read(b []byte) (n int, e error) {
 }
 
 func (c *Conn) Write(b []byte) (n int, err error) {
+	if c.outbuf == nil {
+		c.outbuf = buf.New()
+	}
+
 	if c.outbuf.Buffered() != 0 {
 		c.outbuf.Write(b)
 		return len(b), nil

@@ -17,14 +17,16 @@ var ServerToken = poller.NextToken()
 var ClientToken = poller.NextToken()
 
 type Server struct {
-	portReuse     bool
-	poller        *poller.Poller
-	evServer      EventServer
-	mainEventLoop *EventLoop
-	subEventLoop  []*EventLoop
-	ln            net.Listener
-	fd            int
-	file          *os.File //file 可以避免 accept 时 Bad file descriptor
+	keepAlive       bool
+	keepAlivePeriod int //second count use 3 means 3 second ,notice that it's different from conn.SetKeepAlivePeriod
+	portReuse       bool
+	poller          *poller.Poller
+	evServer        EventServer
+	mainEventLoop   *EventLoop
+	subEventLoop    []*EventLoop
+	ln              net.Listener
+	fd              int
+	file            *os.File
 }
 
 func NewServer(evServer EventServer) (*Server, error) {
@@ -50,6 +52,11 @@ func (s *Server) newEventLoop() (e *EventLoop, err error) {
 	e.server = s
 	e.evServer = s.evServer
 	return
+}
+
+func (s *Server) SetKeepAlive(secs int) {
+	s.keepAlive = true
+	s.keepAlivePeriod = secs
 }
 
 func (s *Server) Listener2Fd(ln net.Listener, nonblock bool) (err error) {
