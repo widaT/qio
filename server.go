@@ -93,7 +93,7 @@ func (s *Server) runLoopsMode() (err error) {
 		if err != nil {
 			return err
 		}
-		eventLoops[i].poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
+		eventLoops[i].poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Level)
 	}
 	wg := sync.WaitGroup{}
 	for _, e := range eventLoops {
@@ -113,12 +113,12 @@ func (s *Server) runMainSubMode() (err error) {
 	if err != nil {
 		return err
 	}
-	err = s.mainEventLoop.poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Edge)
+	err = s.mainEventLoop.poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Level)
 	if err != nil {
 		return err
 	}
 	wg := sync.WaitGroup{}
-	n := runtime.NumCPU()
+	n := runtime.NumCPU() - 1
 	s.subEventLoop = make([]*EventLoop, n)
 	for i := 0; i < n; i++ {
 		s.subEventLoop[i], err = s.newEventLoop()
@@ -136,7 +136,6 @@ func (s *Server) runMainSubMode() (err error) {
 		s.mainEventLoop.run()
 		wg.Done()
 	}()
-
 	wg.Wait()
 	return
 }

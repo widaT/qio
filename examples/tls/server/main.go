@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/widaT/qio"
@@ -35,10 +34,10 @@ func (s *Server) OnMessage(conn *qio.Conn) error {
 		return nil
 	}
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return err
 	}
-	fmt.Printf("receive %s \n", b)
+	log.Printf("receive %s \n", b)
 	tlsConn.Write(b)
 	tlsConn.Shift(n)
 	return nil

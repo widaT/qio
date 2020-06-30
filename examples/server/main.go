@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 
@@ -22,7 +21,7 @@ func (s *Server) OnMessage(conn *qio.Conn) error {
 		}
 		return err
 	}
-	fmt.Printf("%s", b[:n])
+	log.Printf("%s", b[:n])
 	return nil
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/tls"
-	"fmt"
 	"log"
 	"time"
 )
@@ -35,6 +34,6 @@ func tks() {
 			log.Println(n, err)
 			return
 		}
-		fmt.Printf("%s\n", buf[:n])
+		log.Printf("%s\n", buf[:n])
 	}
 }

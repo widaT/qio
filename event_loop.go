@@ -1,8 +1,8 @@
 package qio
 
 import (
-	"fmt"
 	"log"
+	"sync/atomic"
 
 	"github.com/widaT/poller"
 	"github.com/widaT/poller/interest"
@@ -12,7 +12,7 @@ import (
 )
 
 var evId uint32
-var nextIdx int
+var nextIdx uint32
 
 type EventLoop struct {
 	id          uint32
@@ -38,21 +38,24 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	if e.server.portReuse {
 		ev = e
 	} else {
-		if nextIdx == len(e.server.subEventLoop) {
+		if atomic.LoadUint32(&nextIdx) == uint32(len(e.server.subEventLoop)) {
 			nextIdx = 0
 		}
 		ev = e.server.subEventLoop[nextIdx]
-		nextIdx++
+		atomic.AddUint32(&nextIdx, 1)
 	}
-	err := ev.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
-	if err != nil {
-		return err
-	}
+
 	conn := NewConn(ev, fd, sa)
 	ev.runTask(func() {
 		ev.connections[fd] = conn
+		err := ev.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		ev.evServer.OnConnect(conn)
 	})
-	e.evServer.OnConnect(conn)
+
 	return nil
 }
 
@@ -65,40 +68,55 @@ func (e *EventLoop) runTask(fn func()) {
 }
 
 func (e *EventLoop) CloseConn(conn *Conn) {
-	delete(e.connections, int(conn.fd))
-	e.poller.Deregister(int(conn.fd))
+	var err error
+	delete(e.connections, conn.fd)
+	err = e.poller.Deregister(conn.fd)
+	if err != nil {
+		log.Printf("%v", err)
+	}
 	e.evServer.OnClose(conn)
-	fmt.Println(conn.remoteAddr.String(), "close")
-	unix.Close(conn.fd)
+	log.Println(conn.remoteAddr.String(), "close")
+	err = unix.Close(conn.fd)
+	if err != nil {
+		log.Printf("%v", err)
+	}
 	conn.buf.Release()
 	conn.outbuf.Release()
 }
 
 func (e *EventLoop) handleEvent(ev *poller.Event) error {
+	fd := int(ev.Fd)
+
 	switch ev.Token() {
 	case ServerToken:
-		cfd, sa, err := unix.Accept(int(ev.Fd))
-		if err != nil {
-			//WouldBlock
-			if err == unix.EAGAIN {
-				return nil
+		switch {
+		case ev.IsReadable():
+			cfd, sa, err := unix.Accept(fd)
+			if err != nil {
+				//WouldBlock
+				if err == unix.EAGAIN {
+					return nil
+				}
+				return err
 			}
-			return err
+			if err := poller.Nonblock(cfd); err != nil {
+				return err
+			}
+
+			//	SetKeepAlive(cfd, 3)
+			return e.accept(cfd, sa)
 		}
-		if err := poller.Nonblock(cfd); err != nil {
-			return err
-		}
-		return e.accept(cfd, sa)
 	case ClientToken:
-		if conn, found := e.connections[int(ev.Fd)]; found {
+		if conn, found := e.connections[fd]; found {
 			var err error
 			switch {
+			case ev.IsReadClosed() || ev.IsError() || ev.IsWriteClosed():
+				e.CloseConn(conn)
 			case ev.IsReadable():
 				connectionClosed := false
 				for {
 					b := conn.NexWritablePos()
-					n, err := unix.Read(int(ev.Fd), b)
-					//fmt.Println("read ", n)
+					n, err := unix.Read(fd, b)
 					if n == 0 {
 						connectionClosed = true
 						break
@@ -129,11 +147,11 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 				}
 			case ev.IsWritable():
 				if conn.outbuf.Buffered() == 0 {
-					e.poller.Reregister(int(ev.Fd), ClientToken, interest.READABLE, pollopt.Level)
+					e.poller.Reregister(fd, ClientToken, interest.READABLE, pollopt.Level)
 					return nil
 				}
 				b, n := conn.outbuf.Bytes()
-				n, err := unix.Write(int(ev.Fd), b)
+				n, err := unix.Write(fd, b)
 				if err != nil {
 					if err == unix.EAGAIN {
 						return nil
@@ -142,10 +160,20 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 				}
 				conn.outbuf.Shift(n)
 				if conn.outbuf.Buffered() == 0 {
-					e.poller.Reregister(int(ev.Fd), ClientToken, interest.READABLE, pollopt.Level)
+					e.poller.Reregister(fd, ClientToken, interest.READABLE, pollopt.Level)
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func SetKeepAlive(fd, secs int) error {
+	if err := unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_KEEPALIVE, 1); err != nil {
+		return err
+	}
+	if err := unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_KEEPINTVL, secs); err != nil {
+		return err
+	}
+	return unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_KEEPIDLE, secs)
 }

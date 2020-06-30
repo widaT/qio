@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"syscall"
 
@@ -16,9 +15,9 @@ type Server struct {
 }
 
 func (s *Server) OnConnect(conn *qio.Conn) error {
-	//fmt.Println(c.RemoteAddr().String())
 	ctx := http.AcquireContext(httpServer, conn)
 	conn.SetContext(ctx)
+	//fmt.Println(conn.RemoteAddr(), "connect")
 	return nil
 }
 
@@ -28,7 +27,8 @@ func (s *Server) OnMessage(conn *qio.Conn) error {
 		log.Fatal("something wrong")
 	}
 	if err := ctx.ServeHttp(); err != nil {
-		conn.Close()
+		//here don't call conn.Close return err close conn int eventloop
+		log.Println(err)
 		return err
 	}
 	return nil
@@ -38,14 +38,14 @@ func (s *Server) OnClose(conn *qio.Conn) {
 	if conn.GetContext() != nil {
 		ctx := conn.GetContext().(*http.Context)
 		http.ReleaseContext(ctx)
-		fmt.Println(conn.RemoteAddr(), "close")
+		//	fmt.Println(conn.RemoteAddr(), "close")
 	}
 }
 
 func handler(ctx *http.Context) {
 	//fmt.Println(*ctx.Request().Header())
 	resp := ctx.Response()
-	resp.SetBody([]byte("hello"))
+	resp.SetBody([]byte("hello" + ctx.RemoteAddr().String()))
 }
 
 func main() {
