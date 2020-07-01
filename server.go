@@ -17,16 +17,14 @@ var ServerToken = poller.NextToken()
 var ClientToken = poller.NextToken()
 
 type Server struct {
-	keepAlive       bool
-	keepAlivePeriod int //second count use 3 means 3 second ,notice that it's different from conn.SetKeepAlivePeriod
-	portReuse       bool
-	poller          *poller.Poller
-	evServer        EventServer
-	mainEventLoop   *EventLoop
-	subEventLoop    []*EventLoop
-	ln              net.Listener
-	fd              int
-	file            *os.File
+	settings      *Settings
+	poller        *poller.Poller
+	evServer      EventServer
+	mainEventLoop *EventLoop
+	subEventLoop  []*EventLoop
+	ln            net.Listener
+	fd            int
+	file          *os.File
 }
 
 func NewServer(evServer EventServer) (*Server, error) {
@@ -36,8 +34,9 @@ func NewServer(evServer EventServer) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	server.portReuse = reuseSuported()
+	//	server.portReuse = reuseSuported()
 	server.evServer = evServer
+	server.settings = defaultSetting()
 	return server, nil
 }
 
@@ -52,11 +51,6 @@ func (s *Server) newEventLoop() (e *EventLoop, err error) {
 	e.server = s
 	e.evServer = s.evServer
 	return
-}
-
-func (s *Server) SetKeepAlive(secs int) {
-	s.keepAlive = true
-	s.keepAlivePeriod = secs
 }
 
 func (s *Server) Listener2Fd(ln net.Listener, nonblock bool) (err error) {
@@ -76,7 +70,7 @@ func (s *Server) Listener2Fd(ln net.Listener, nonblock bool) (err error) {
 	return
 }
 
-func (s *Server) Serve(network string, addr string) error {
+func (s *Server) Serve(network string, addr string, opts ...Option) error {
 	var err error
 	s.ln, err = net.Listen(network, addr)
 	if err != nil {
@@ -86,14 +80,17 @@ func (s *Server) Serve(network string, addr string) error {
 	if err != nil {
 		return err
 	}
-	if s.portReuse {
+	for _, o := range opts {
+		o(s.settings)
+	}
+	if s.settings.portReuse {
 		return s.runLoopsMode()
 	}
 	return s.runMainSubMode()
 }
 
 func (s *Server) runLoopsMode() (err error) {
-	n := runtime.NumCPU()
+	n := s.settings.eventLoopNum
 	eventLoops := make([]*EventLoop, n)
 	for i := 0; i < n; i++ {
 		eventLoops[i], err = s.newEventLoop()
@@ -125,7 +122,7 @@ func (s *Server) runMainSubMode() (err error) {
 		return err
 	}
 	wg := sync.WaitGroup{}
-	n := runtime.NumCPU() - 1
+	n := s.settings.eventLoopNum
 	s.subEventLoop = make([]*EventLoop, n)
 	for i := 0; i < n; i++ {
 		s.subEventLoop[i], err = s.newEventLoop()

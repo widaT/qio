@@ -35,7 +35,7 @@ func (e *EventLoop) run() {
 
 func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	var ev *EventLoop
-	if e.server.portReuse {
+	if e.server.settings.portReuse {
 		ev = e
 	} else {
 		if atomic.LoadUint32(&nextIdx) == uint32(len(e.server.subEventLoop)) {
@@ -46,11 +46,11 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	}
 
 	conn := NewConn(ev, fd, sa)
-	if e.server.keepAlive {
+	if e.server.settings.keepAlive {
 		if err := setKeepAlive(fd); err != nil {
 			return err
 		}
-		if err := setKeepAlivePeriod(fd, e.server.keepAlivePeriod); err != nil {
+		if err := setKeepAlivePeriod(fd, e.server.settings.keepAlivePeriod); err != nil {
 			return err
 		}
 	}
@@ -83,7 +83,7 @@ func (e *EventLoop) CloseConn(conn *Conn) {
 		log.Printf("%v", err)
 	}
 	e.evServer.OnClose(conn)
-	log.Println(conn.remoteAddr.String(), "close")
+	//log.Println(conn.remoteAddr.String(), "close")
 	err = unix.Close(conn.fd)
 	if err != nil {
 		log.Printf("%v", err)

@@ -23,6 +23,7 @@ func NewConn(ev *EventLoop, fd int, sa unix.Sockaddr) *Conn {
 	c := new(Conn)
 	c.e = ev
 	c.buf = buf.New()
+
 	//outbuf use lazy initialize
 	//c.outbuf = buf.New()
 	c.fd = fd
