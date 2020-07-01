@@ -42,9 +42,9 @@ func (c *Conn) GetContext() interface{} {
 	return c.context
 }
 
-func (c *Conn) Bytes() (b []byte) {
-	b, _ = c.buf.Bytes()
-	return
+func (c *Conn) Bytes() ([]byte, error) {
+	b, _ := c.buf.Bytes()
+	return b, nil
 }
 
 func (c *Conn) Buffered() int {
