@@ -64,5 +64,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server.Serve("tcp", ":9999")
+	server.Serve("tcp", ":9999", qio.SetKeepAlive(3)) //, qio.SetEventLoopNum(1))
 }
