@@ -8,8 +8,6 @@ import (
 	"sync/atomic"
 
 	"github.com/widaT/poller"
-	"github.com/widaT/poller/interest"
-	"github.com/widaT/poller/pollopt"
 	"golang.org/x/sys/unix"
 )
 
@@ -97,7 +95,7 @@ func (s *Server) runLoopsMode() (err error) {
 		if err != nil {
 			return err
 		}
-		eventLoops[i].poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Level)
+		eventLoops[i].registerRead(s.fd, poller.Token(ServerToken))
 	}
 	wg := sync.WaitGroup{}
 	for _, e := range eventLoops {
@@ -117,7 +115,7 @@ func (s *Server) runMainSubMode() (err error) {
 	if err != nil {
 		return err
 	}
-	err = s.mainEventLoop.poller.Register(s.fd, poller.Token(ServerToken), interest.READABLE, pollopt.Level)
+	err = s.mainEventLoop.registerRead(s.fd, poller.Token(ServerToken))
 	if err != nil {
 		return err
 	}

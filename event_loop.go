@@ -56,7 +56,7 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	}
 	ev.runTask(func() {
 		ev.connections[fd] = conn
-		err := ev.poller.Register(fd, ClientToken, interest.READABLE, pollopt.Level)
+		err := ev.registerRead(fd, ClientToken)
 		if err != nil {
 			log.Println(err)
 			return
@@ -65,6 +65,18 @@ func (e *EventLoop) accept(fd int, sa unix.Sockaddr) error {
 	})
 
 	return nil
+}
+
+func (e *EventLoop) registerRead(fd int, token poller.Token) error {
+	return e.poller.Register(fd, token, interest.READABLE, pollopt.Level)
+}
+
+func (e *EventLoop) reRegisterRead(fd int, token poller.Token) error {
+	return e.poller.Reregister(fd, token, interest.READABLE, pollopt.Level)
+}
+
+func (e *EventLoop) reRegisterReadWrite(fd int, token poller.Token) error {
+	return e.poller.Reregister(fd, token, interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
 }
 
 func (e *EventLoop) runTask(fn func()) {
@@ -157,7 +169,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 				}
 			case ev.IsWritable():
 				if conn.outbuf == nil || conn.outbuf.Buffered() == 0 {
-					e.poller.Reregister(fd, ClientToken, interest.READABLE, pollopt.Level)
+					e.reRegisterRead(fd, ClientToken)
 					return nil
 				}
 				b, n := conn.outbuf.Bytes()
@@ -170,7 +182,7 @@ func (e *EventLoop) handleEvent(ev *poller.Event) error {
 				}
 				conn.outbuf.Shift(n)
 				if conn.outbuf.Buffered() == 0 {
-					e.poller.Reregister(fd, ClientToken, interest.READABLE, pollopt.Level)
+					e.reRegisterRead(fd, ClientToken)
 				}
 			}
 		}

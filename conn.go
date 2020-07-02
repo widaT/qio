@@ -4,8 +4,6 @@ import (
 	"net"
 
 	buf "github.com/widaT/linkedbuf"
-	"github.com/widaT/poller/interest"
-	"github.com/widaT/poller/pollopt"
 	"golang.org/x/sys/unix"
 )
 
@@ -64,10 +62,6 @@ func (c *Conn) MoveWritePiont(n int) {
 	c.buf.MoveWritePiont(n)
 }
 
-func (c *Conn) BufferPoint() *buf.LinkedBuffer {
-	return c.buf
-}
-
 func (c *Conn) Read(b []byte) (n int, e error) {
 	n, e = c.buf.Read(b)
 	return
@@ -86,14 +80,14 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	if err != nil {
 		if err == unix.EAGAIN {
 			c.outbuf.Write(b)
-			c.e.poller.Reregister(c.fd, ClientToken, interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
+			c.e.reRegisterReadWrite(c.fd, ClientToken)
 			return
 		}
 		return
 	}
 	if n < len(b) {
 		c.outbuf.Write(b[n:])
-		c.e.poller.Reregister(c.fd, ClientToken, interest.READABLE.Add(interest.WRITABLE), pollopt.Level)
+		c.e.reRegisterReadWrite(c.fd, ClientToken)
 	}
 	return len(b), nil
 }

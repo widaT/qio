@@ -12,4 +12,3 @@ require (
 )
 
 replace github.com/widaT/http1 v0.0.0-20200701023808-7e9381a25a8b => /home/wida/gocode/net/http1
-
